@@ -76,3 +76,19 @@ tmp/
 
 # OS files
 Thumbs.db
+
+# Extra files that shouldn't be in repo
+ARCHITECTURE.md
+DESIGN.md
+CHANGELOG.md
+Caddyfile
+agent-ctx/
+download/
+examples/
+generate_community_files.sh
+skills/
+upload/
+temp/
+yoga-audit/
+public/sw.js
+public/workbox-*.js
