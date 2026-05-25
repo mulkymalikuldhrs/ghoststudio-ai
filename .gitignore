@@ -1,94 +1,61 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# =============================================================================
+# GhostStudio AI — Git Ignore
+# =============================================================================
 
-# dependencies
+# Dependencies
 node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
 
-# testing
-/coverage
+# Next.js build output
+.next
+out
 
-# next.js
-/.next/
-/out/
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# production
-/build
+# Database (SQLite dev)
+dev.db
+*.db-journal
 
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-local-*
-.claude
-.z-ai-config
-*.log
+# Logs
 dev.log
-dev.out.log
-test
-prompt
-
 server.log
-# Skills directory
-/skills/
 
-# Database
-db/*.db
-db/*.db-journal
+# Prisma migrations (generated locally)
+prisma/migrations/
 
-# Uploads & Downloads
-/upload/
-/download/
+# IDE
+.vscode
+.idea
 
-# Mini services
-/mini-services/
-
-# Z scripts
-.zscripts/
-
-# Worklog
-worklog.md
-# Temp files
-temp/
-tmp/
-*.tmp
-
-# OS files
+# OS
+.DS_Store
 Thumbs.db
 
-# Extra files that shouldn't be in repo
-ARCHITECTURE.md
-DESIGN.md
-CHANGELOG.md
-Caddyfile
-agent-ctx/
-download/
-examples/
-generate_community_files.sh
+# Debug
+npm-debug.log*
+
+# Coverage
+coverage
+.nyc_output
+
+# Vercel
+.vercel
+node_modules/
+.next/
+.env
+.env.local
+.env*.local
+*.db
+*.db-journal
+dev.log
+server.log
+prisma/migrations/
 skills/
-upload/
-temp/
-yoga-audit/
-public/sw.js
-public/workbox-*.js
+dist/
+.turbo/
+.DS_Store
+

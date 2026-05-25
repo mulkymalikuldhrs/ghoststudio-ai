@@ -14,99 +14,74 @@ import { Button } from "@/components/ui/button";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { ProjectCard } from "@/components/dashboard/project-card";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
+import { useProjects, useAnalytics } from "@/lib/hooks";
 import Link from "next/link";
 
-// Demo data
-const stats = [
-  {
-    title: "Videos Created",
-    value: 47,
-    change: "+12%",
-    changeType: "positive" as const,
-    icon: Video,
-  },
-  {
-    title: "Total Views",
-    value: "2.4M",
-    change: "+28%",
-    changeType: "positive" as const,
-    icon: Eye,
-  },
-  {
-    title: "Rendering Queue",
-    value: 3,
-    change: "Active",
-    changeType: "neutral" as const,
-    icon: Loader2,
-  },
-  {
-    title: "Avg. Watch Time",
-    value: "0:42",
-    change: "+5%",
-    changeType: "positive" as const,
-    icon: TrendingUp,
-  },
-];
-
-const projects = [
-  {
-    id: "1",
-    title: "Why 90% of People Never Escape the Matrix",
-    status: "completed",
-    duration: 58,
-    createdAt: new Date().toISOString(),
-    niche: "Motivation",
-  },
-  {
-    id: "2",
-    title: "The Haunted Room 301 - True Story",
-    status: "rendering",
-    duration: 45,
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    niche: "Horror",
-  },
-  {
-    id: "3",
-    title: "Bitcoin Will Hit $500K - Here's Why",
-    status: "completed",
-    duration: 60,
-    createdAt: new Date(Date.now() - 172800000).toISOString(),
-    niche: "Crypto",
-  },
-  {
-    id: "4",
-    title: "5 Anime Plot Twists That Broke the Internet",
-    status: "generating",
-    duration: 52,
-    createdAt: new Date(Date.now() - 259200000).toISOString(),
-    niche: "Anime",
-  },
-  {
-    id: "5",
-    title: "How Your Brain Tricks You Every Day",
-    status: "completed",
-    duration: 47,
-    createdAt: new Date(Date.now() - 345600000).toISOString(),
-    niche: "Education",
-  },
-  {
-    id: "6",
-    title: "The Creepiest Abandoned Places on Earth",
-    status: "draft",
-    duration: 0,
-    createdAt: new Date(Date.now() - 432000000).toISOString(),
-    niche: "Horror",
-  },
-];
-
-const recentActivity = [
-  { text: "Video exported: Why 90% of People Never Escape the Matrix", time: "5 min ago", type: "success" },
-  { text: "Rendering started: The Haunted Room 301", time: "23 min ago", type: "info" },
-  { text: "Script generated: 5 Anime Plot Twists", time: "1 hour ago", type: "info" },
-  { text: "New subscriber milestone: 100K followers", time: "3 hours ago", type: "success" },
-];
-
 export default function DashboardPage() {
+  const { data: projectsData, isLoading: projectsLoading } = useProjects();
+  const { data: analyticsData, isLoading: analyticsLoading } = useAnalytics();
+
+  const stats = analyticsData?.stats ?? {
+    totalProjects: 0,
+    completedProjects: 0,
+    draftProjects: 0,
+    renderingProjects: 0,
+  };
+
+  const statsCards = [
+    {
+      title: "Total Projects",
+      value: stats.totalProjects,
+      change: `${stats.completedProjects} completed`,
+      changeType: "positive" as const,
+      icon: Video,
+    },
+    {
+      title: "Completed",
+      value: stats.completedProjects,
+      change: `${stats.draftProjects} drafts`,
+      changeType: "neutral" as const,
+      icon: Eye,
+    },
+    {
+      title: "Rendering",
+      value: stats.renderingProjects,
+      change: stats.renderingProjects > 0 ? "Active" : "None",
+      changeType: "neutral" as const,
+      icon: Loader2,
+    },
+    {
+      title: "Draft",
+      value: stats.draftProjects,
+      change: "Pending",
+      changeType: "neutral" as const,
+      icon: TrendingUp,
+    },
+  ];
+
+  const projects = projectsData?.projects ?? [];
+
+  const recentActivity = [
+    ...(projects.slice(0, 4).map((p: { title: string; status: string; updatedAt: string }) => ({
+      text: `${p.status === "completed" ? "Video exported" : p.status === "rendering" ? "Rendering started" : "Script generated"}: ${p.title}`,
+      time: new Date(p.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      type: p.status === "completed" ? "success" : "info",
+    }))),
+  ];
+
+  if (projectsLoading || analyticsLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <div className="text-center space-y-4">
+            <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
+            <p className="text-muted-foreground">Loading your dashboard...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -128,7 +103,7 @@ export default function DashboardPage() {
 
         {/* Stats grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {stats.map((stat, i) => (
+          {statsCards.map((stat, i) => (
             <motion.div
               key={stat.title}
               initial={{ opacity: 0, y: 20 }}
@@ -150,50 +125,81 @@ export default function DashboardPage() {
                 View All <ArrowUpRight className="w-3 h-3 ml-1" />
               </Button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {projects.map((project, i) => (
-                <motion.div
-                  key={project.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 + i * 0.05 }}
-                >
-                  <ProjectCard {...project} />
-                </motion.div>
-              ))}
-            </div>
+            {projects.length === 0 ? (
+              <div className="text-center py-16 space-y-4">
+                <Video className="w-12 h-12 text-muted-foreground/30 mx-auto" />
+                <h3 className="text-lg font-semibold text-muted-foreground">
+                  No projects yet
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Create your first video to get started
+                </p>
+                <Button className="gradient-cyber text-primary-foreground glow-cyber-sm" asChild>
+                  <Link href="/dashboard/create">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Your First Video
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                {projects.slice(0, 6).map((project: { id: string; title: string; status: string; duration: number; createdAt: string; niche?: string }, i: number) => (
+                  <motion.div
+                    key={project.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 + i * 0.05 }}
+                  >
+                    <ProjectCard
+                      id={project.id}
+                      title={project.title}
+                      status={project.status}
+                      duration={project.duration}
+                      createdAt={project.createdAt}
+                      niche={project.niche}
+                    />
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Activity feed */}
           <div className="space-y-4">
             <h2 className="text-lg font-semibold">Recent Activity</h2>
             <div className="rounded-xl border border-border/30 bg-card/30 p-4 space-y-4 max-h-96 overflow-y-auto">
-              {recentActivity.map((activity, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.3 + i * 0.1 }}
-                  className="flex items-start gap-3"
-                >
-                  <div
-                    className={`w-2 h-2 rounded-full mt-2 shrink-0 ${
-                      activity.type === "success"
-                        ? "bg-primary"
-                        : "bg-secondary"
-                    }`}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm leading-relaxed">{activity.text}</p>
-                    <div className="flex items-center gap-1 mt-1">
-                      <Clock className="w-3 h-3 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">
-                        {activity.time}
-                      </span>
+              {recentActivity.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No activity yet. Create a project to get started.
+                </p>
+              ) : (
+                recentActivity.map((activity, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 + i * 0.1 }}
+                    className="flex items-start gap-3"
+                  >
+                    <div
+                      className={`w-2 h-2 rounded-full mt-2 shrink-0 ${
+                        activity.type === "success"
+                          ? "bg-primary"
+                          : "bg-secondary"
+                      }`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm leading-relaxed">{activity.text}</p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <Clock className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">
+                          {activity.time}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                ))
+              )}
             </div>
           </div>
         </div>

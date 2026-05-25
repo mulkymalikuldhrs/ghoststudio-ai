@@ -1,0 +1,62 @@
+# =============================================================================
+# GhostStudio AI — Docker Compose (Development & Production)
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Next.js Application
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ghoststudio-ai
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ghoststudio
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database (production-grade; SQLite is used for local dev)
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: ghoststudio-db
+    environment:
+      POSTGRES_DB: ghoststudio
+      POSTGRES_USER: ghoststudio
+      POSTGRES_PASSWORD: ghoststudio_secret
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ghoststudio"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - ghoststudio
+
+# ---------------------------------------------------------------------------
+# Named Volumes
+# ---------------------------------------------------------------------------
+volumes:
+  pgdata:
+    driver: local
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+networks:
+  ghoststudio:
+    driver: bridge

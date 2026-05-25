@@ -1,0 +1,52 @@
+# =============================================================================
+# GhostStudio AI — Docker Ignore
+# =============================================================================
+
+# Dependencies (installed fresh inside container)
+node_modules
+
+# Next.js build output (rebuilt inside container)
+.next
+
+# Git
+.git
+.gitignore
+
+# Environment files (passed via --env-file or docker-compose env_file)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Documentation (keep README for context)
+*.md
+!README.md
+
+# Logs
+dev.log
+server.log
+
+# Database
+*.db
+*.db-journal
+dev.db
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.yml
+Dockerfile
+
+# CI
+.github
+
+# Misc
+coverage
+.nyc_output

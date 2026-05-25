@@ -2,15 +2,41 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Ghost, Github, Mail, ArrowRight } from "lucide-react";
+import { Ghost, Github, Mail, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { signIn } from "next-auth/react";
+import { toast } from "sonner";
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        toast.error("Invalid email or password");
+      } else {
+        window.location.href = "/dashboard";
+      }
+    } catch {
+      toast.error("Failed to sign in. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center relative">
@@ -46,9 +72,7 @@ export default function SignInPage() {
             <Button
               variant="outline"
               className="w-full justify-start gap-3 h-11 border-border/50"
-              onClick={() => {
-                window.location.href = "/api/auth/signin/github";
-              }}
+              onClick={() => signIn("github", { callbackUrl: "/dashboard" })}
             >
               <Github className="w-4 h-4" />
               Continue with GitHub
@@ -56,9 +80,7 @@ export default function SignInPage() {
             <Button
               variant="outline"
               className="w-full justify-start gap-3 h-11 border-border/50"
-              onClick={() => {
-                window.location.href = "/api/auth/signin/google";
-              }}
+              onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path
@@ -90,18 +112,7 @@ export default function SignInPage() {
           </div>
 
           {/* Email form */}
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              // Handle credentials sign in
-              fetch("/api/auth/signin", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, password }),
-              });
-            }}
-          >
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -110,6 +121,7 @@ export default function SignInPage() {
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                required
                 className="h-11 bg-background/50 border-border/50"
               />
             </div>
@@ -129,14 +141,20 @@ export default function SignInPage() {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
                 className="h-11 bg-background/50 border-border/50"
               />
             </div>
             <Button
               type="submit"
+              disabled={isLoading}
               className="w-full gradient-cyber text-primary-foreground h-11 glow-cyber-sm"
             >
-              <Mail className="mr-2 w-4 h-4" />
+              {isLoading ? (
+                <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+              ) : (
+                <Mail className="mr-2 w-4 h-4" />
+              )}
               Sign In with Email
             </Button>
           </form>

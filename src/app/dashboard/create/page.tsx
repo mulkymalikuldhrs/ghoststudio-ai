@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
@@ -28,6 +28,9 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { useProjectStore, type CreationStep } from "@/store/project-store";
+import { useCreateProject, useGenerateScript } from "@/lib/hooks";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 const steps: { id: CreationStep; label: string; icon: React.ElementType }[] = [
   { id: "prompt", label: "Prompt", icon: Sparkles },
@@ -74,28 +77,29 @@ const templates = [
 
 export default function CreatePage() {
   const store = useProjectStore();
+  const router = useRouter();
   const [scriptOutput, setScriptOutput] = useState("");
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
   const currentStepIndex = steps.findIndex((s) => s.id === store.currentStep);
+
+  const generateScriptMutation = useGenerateScript();
+  const createProjectMutation = useCreateProject();
 
   const handleGenerateScript = async () => {
     store.setIsGeneratingScript(true);
     try {
-      const res = await fetch("/api/projects/generate-script", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: store.prompt,
-          niche: store.niche,
-          duration: store.duration,
-        }),
+      const data = await generateScriptMutation.mutateAsync({
+        prompt: store.prompt,
+        niche: store.niche,
+        duration: store.duration,
       });
-      const data = await res.json();
       if (data.script) {
         setScriptOutput(data.script);
         store.setRawScript(data.script);
+        toast.success("Script generated successfully!");
       }
     } catch {
-      // Demo fallback
+      // Fallback demo script if AI fails
       const demoScript = JSON.stringify({
         title: store.prompt,
         hook: "This will change everything you thought you knew...",
@@ -109,31 +113,43 @@ export default function CreatePage() {
       }, null, 2);
       setScriptOutput(demoScript);
       store.setRawScript(demoScript);
+      toast.info("Using demo script. AI service unavailable.");
     }
     store.setIsGeneratingScript(false);
   };
 
-  const handleStartRender = () => {
-    store.setIsRendering(true);
-    store.setRenderProgress(0);
-    // Simulate rendering progress
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 15;
-      if (progress >= 100) {
-        progress = 100;
-        clearInterval(interval);
-        store.setIsRendering(false);
-      }
-      store.setRenderProgress(Math.min(Math.round(progress), 100));
-    }, 500);
-  };
+  const handleStartRender = async () => {
+    try {
+      // Create the project in the database
+      const result = await createProjectMutation.mutateAsync({
+        title: store.prompt.slice(0, 100),
+        prompt: store.prompt,
+        niche: store.niche,
+      });
 
-  useEffect(() => {
-    return () => {
-      // Cleanup on unmount
-    };
-  }, []);
+      if (result.project?.id) {
+        setCreatedProjectId(result.project.id);
+      }
+
+      store.setIsRendering(true);
+      store.setRenderProgress(0);
+
+      // Simulate rendering progress
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(interval);
+          store.setIsRendering(false);
+          toast.success("Video generated successfully!");
+        }
+        store.setRenderProgress(Math.min(Math.round(progress), 100));
+      }, 500);
+    } catch {
+      toast.error("Failed to create project. Please try again.");
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -235,7 +251,12 @@ export default function CreatePage() {
 
               <div className="flex justify-end">
                 <Button
-                  onClick={() => store.setCurrentStep("script")}
+                  onClick={() => {
+                    store.setCurrentStep("script");
+                    if (!scriptOutput && !store.rawScript) {
+                      handleGenerateScript();
+                    }
+                  }}
                   disabled={!store.prompt}
                   className="gradient-cyber text-primary-foreground glow-cyber-sm"
                 >
@@ -330,7 +351,6 @@ export default function CreatePage() {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-6"
             >
-              {/* Template */}
               <div className="space-y-2">
                 <Label>Template</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -360,7 +380,6 @@ export default function CreatePage() {
                 </div>
               </div>
 
-              {/* Voice */}
               <div className="space-y-2">
                 <Label>Voice</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -383,7 +402,6 @@ export default function CreatePage() {
                 </div>
               </div>
 
-              {/* Subtitle Style */}
               <div className="space-y-2">
                 <Label>Subtitle Style</Label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -406,7 +424,6 @@ export default function CreatePage() {
                 </div>
               </div>
 
-              {/* Pacing */}
               <div className="space-y-2">
                 <Label>Pacing</Label>
                 <Select value={store.pacing} onValueChange={store.setPacing}>
@@ -482,9 +499,14 @@ export default function CreatePage() {
                       <Button
                         size="lg"
                         onClick={handleStartRender}
+                        disabled={createProjectMutation.isPending}
                         className="gradient-cyber text-primary-foreground glow-cyber"
                       >
-                        <Rocket className="w-5 h-5 mr-2" />
+                        {createProjectMutation.isPending ? (
+                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        ) : (
+                          <Rocket className="w-5 h-5 mr-2" />
+                        )}
                         Start Rendering
                       </Button>
                     </>
@@ -520,7 +542,7 @@ export default function CreatePage() {
                       </div>
                       <div>
                         <h3 className="text-xl font-bold mb-2">
-                          Video Generated! 🎉
+                          Video Generated!
                         </h3>
                         <p className="text-muted-foreground">
                           Your faceless video is ready for download and posting.
@@ -529,11 +551,13 @@ export default function CreatePage() {
                       <div className="flex gap-3 justify-center">
                         <Button
                           className="gradient-cyber text-primary-foreground glow-cyber-sm"
-                          asChild
+                          onClick={() => {
+                            if (createdProjectId) {
+                              router.push(`/dashboard/project/${createdProjectId}`);
+                            }
+                          }}
                         >
-                          <a href="/dashboard/project/demo-1">
-                            View Video
-                          </a>
+                          View Video
                         </Button>
                         <Button
                           variant="outline"

@@ -1,14 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 
-// GET /api/projects - List all projects
+// GET /api/projects - List all projects for the authenticated user
 export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId") ?? "demo-user";
     const status = searchParams.get("status");
 
-    const where: Record<string, unknown> = { userId };
+    const where: Record<string, unknown> = { userId: user.id };
     if (status) {
       where.status = status;
     }
@@ -32,12 +46,25 @@ export async function GET(request: NextRequest) {
 // POST /api/projects - Create a new project
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { title, prompt, userId, niche } = body;
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    if (!title || !userId) {
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const body = await request.json();
+    const { title, prompt, niche } = body;
+
+    if (!title) {
       return NextResponse.json(
-        { error: "Title and userId are required" },
+        { error: "Title is required" },
         { status: 400 }
       );
     }
@@ -46,7 +73,8 @@ export async function POST(request: NextRequest) {
       data: {
         title,
         prompt: prompt ?? null,
-        userId,
+        niche: niche ?? "general",
+        userId: user.id,
         status: "draft",
       },
     });

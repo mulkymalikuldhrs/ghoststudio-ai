@@ -4,6 +4,25 @@ import GitHubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
 import { db } from "@/lib/db";
 
+// Simple password hashing using Web Crypto API (no bcrypt dependency needed)
+// In production, consider using argon2 or bcrypt via a worker thread
+export async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + (process.env.NEXTAUTH_SECRET ?? "ghoststudio-secret-dev"));
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export async function verifyPassword(
+  password: string,
+  hashedPassword: string
+): Promise<boolean> {
+  const hash = await hashPassword(password);
+  return hash === hashedPassword;
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -19,9 +38,12 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email },
         });
 
-        if (!user) return null;
+        if (!user || !user.password) return null;
 
-        // In production, verify hashed password. For demo, accept any password
+        // Verify hashed password
+        const isValid = await verifyPassword(credentials.password, user.password);
+        if (!isValid) return null;
+
         return {
           id: user.id,
           email: user.email,
@@ -54,6 +76,20 @@ export const authOptions: NextAuthOptions = {
               plan: "free",
             },
           });
+          // Create free subscription for OAuth users
+          const newUser = await db.user.findUnique({
+            where: { email: user.email },
+          });
+          if (newUser) {
+            await db.subscription.create({
+              data: {
+                userId: newUser.id,
+                plan: "free",
+                status: "active",
+                currentPeriodStart: new Date(),
+              },
+            });
+          }
         }
       }
       return true;
@@ -65,7 +101,7 @@ export const authOptions: NextAuthOptions = {
         });
         if (dbUser) {
           session.user.id = dbUser.id;
-          (session.user as Record<string, unknown>).plan = dbUser.plan;
+          session.user.plan = dbUser.plan;
         }
       }
       return session;
@@ -85,10 +121,10 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: "/auth/signin",
-    signUp: "/auth/signup",
   },
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  secret: process.env.NEXTAUTH_SECRET ?? "ghoststudio-secret-dev",
+  secret: process.env.NEXTAUTH_SECRET,
 };

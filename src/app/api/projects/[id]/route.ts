@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 // GET /api/projects/[id] - Get a single project
@@ -7,6 +9,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const project = await db.project.findUnique({
       where: { id },
@@ -18,6 +25,14 @@ export async function GET(
         { error: "Project not found" },
         { status: 404 }
       );
+    }
+
+    // Verify ownership
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+    });
+    if (!user || project.userId !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     return NextResponse.json({ project });
@@ -36,12 +51,39 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const body = await request.json();
 
+    // Verify ownership
+    const existingProject = await db.project.findUnique({ where: { id } });
+    if (!existingProject) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+    });
+    if (!user || existingProject.userId !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Only allow updating specific fields
+    const allowedFields = ["title", "prompt", "niche", "status", "videoUrl", "thumbnailUrl", "duration"];
+    const updateData: Record<string, unknown> = {};
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) {
+        updateData[field] = body[field];
+      }
+    }
+
     const project = await db.project.update({
       where: { id },
-      data: body,
+      data: updateData,
     });
 
     return NextResponse.json({ project });
@@ -60,7 +102,26 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
+
+    // Verify ownership
+    const existingProject = await db.project.findUnique({ where: { id } });
+    if (!existingProject) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+    });
+    if (!user || existingProject.userId !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     await db.project.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -1,22 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
-const TIER_PRICES: Record<string, Record<string, number>> = {
-  free: { monthly: 0, yearly: 0 },
-  professional: { monthly: 19, yearly: 190 },
-  business: { monthly: 49, yearly: 490 },
-}
-
+// GET /api/subscriptions - List user's subscriptions
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.nextUrl.searchParams.get('userId')
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-    if (!userId) {
-      return NextResponse.json({ error: 'userId query parameter is required' }, { status: 400 })
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+    })
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     const subscriptions = await db.subscription.findMany({
-      where: { userId },
+      where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
     })
 
@@ -27,60 +31,77 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// POST /api/subscriptions - Create or update subscription
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
-    const { userId, tier, period } = body
+    const { plan } = body
 
-    if (!userId || !tier) {
-      return NextResponse.json({ error: 'userId and tier are required' }, { status: 400 })
+    const validPlans = ['free', 'creator', 'pro', 'agency']
+    if (!plan || !validPlans.includes(plan)) {
+      return NextResponse.json(
+        { error: `Invalid plan. Valid: ${validPlans.join(', ')}` },
+        { status: 400 }
+      )
     }
 
-    const validTiers = ['free', 'professional', 'business']
-    if (!validTiers.includes(tier)) {
-      return NextResponse.json({ error: `Invalid tier. Valid: ${validTiers.join(', ')}` }, { status: 400 })
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+    })
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const subPeriod = period || 'monthly'
-    const price = TIER_PRICES[tier]?.[subPeriod] || 0
+    // Check for existing active subscription
+    const existing = await db.subscription.findFirst({
+      where: { userId: user.id, status: 'active' },
+    })
 
     const startDate = new Date()
     const endDate = new Date()
-    if (subPeriod === 'monthly') {
-      endDate.setMonth(endDate.getMonth() + 1)
-    } else {
-      endDate.setFullYear(endDate.getFullYear() + 1)
-    }
-
-    const existing = await db.subscription.findFirst({
-      where: { userId, status: 'active' },
-    })
+    endDate.setMonth(endDate.getMonth() + 1)
 
     if (existing) {
       const updated = await db.subscription.update({
         where: { id: existing.id },
         data: {
-          tier,
-          period: subPeriod,
-          price,
-          startDate,
-          endDate,
+          plan,
           status: 'active',
+          currentPeriodStart: startDate,
+          currentPeriodEnd: endDate,
+          cancelAtPeriodEnd: false,
         },
       })
+
+      // Also update user plan
+      await db.user.update({
+        where: { id: user.id },
+        data: { plan },
+      })
+
       return NextResponse.json({ subscription: updated })
     }
 
     const subscription = await db.subscription.create({
       data: {
-        userId,
-        tier,
-        period: subPeriod,
-        price,
-        startDate,
-        endDate,
+        userId: user.id,
+        plan,
         status: 'active',
+        currentPeriodStart: startDate,
+        currentPeriodEnd: endDate,
       },
+    })
+
+    // Also update user plan
+    await db.user.update({
+      where: { id: user.id },
+      data: { plan },
     })
 
     return NextResponse.json({ subscription }, { status: 201 })

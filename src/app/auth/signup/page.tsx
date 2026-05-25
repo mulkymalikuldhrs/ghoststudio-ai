@@ -2,22 +2,57 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Ghost, Github, Mail, ArrowRight, Check } from "lucide-react";
+import { Ghost, Github, Mail, ArrowRight, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
 
 export default function SignUpPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const passwordChecks = [
     { label: "8+ characters", met: password.length >= 8 },
     { label: "Uppercase", met: /[A-Z]/.test(password) },
     { label: "Number", met: /[0-9]/.test(password) },
   ];
+
+  const isPasswordValid = passwordChecks.every((c) => c.met);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isPasswordValid) {
+      toast.error("Please meet all password requirements");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error ?? "Failed to create account");
+        return;
+      }
+
+      toast.success("Account created! Please sign in.");
+      window.location.href = "/auth/signin";
+    } catch {
+      toast.error("Failed to create account. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center relative">
@@ -97,18 +132,7 @@ export default function SignUpPage() {
           </div>
 
           {/* Email form */}
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              // Handle sign up
-              fetch("/api/auth/signup", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name, email, password }),
-              });
-            }}
-          >
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
               <Input
@@ -117,6 +141,7 @@ export default function SignUpPage() {
                 placeholder="Your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                required
                 className="h-11 bg-background/50 border-border/50"
               />
             </div>
@@ -128,6 +153,7 @@ export default function SignUpPage() {
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                required
                 className="h-11 bg-background/50 border-border/50"
               />
             </div>
@@ -139,6 +165,7 @@ export default function SignUpPage() {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
                 className="h-11 bg-background/50 border-border/50"
               />
               {password && (
@@ -159,9 +186,14 @@ export default function SignUpPage() {
             </div>
             <Button
               type="submit"
+              disabled={isLoading || !isPasswordValid}
               className="w-full gradient-cyber text-primary-foreground h-11 glow-cyber-sm"
             >
-              <Mail className="mr-2 w-4 h-4" />
+              {isLoading ? (
+                <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+              ) : (
+                <Mail className="mr-2 w-4 h-4" />
+              )}
               Create Account
             </Button>
           </form>

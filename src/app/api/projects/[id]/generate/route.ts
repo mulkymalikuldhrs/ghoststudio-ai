@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { generateScript } from "@/lib/ai";
 
@@ -8,17 +10,24 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const project = await db.project.findUnique({
-      where: { id },
-      include: { videos: true },
-    });
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    if (!project) {
-      return NextResponse.json(
-        { error: "Project not found" },
-        { status: 404 }
-      );
+    const { id } = await params;
+
+    // Verify ownership
+    const existingProject = await db.project.findUnique({ where: { id } });
+    if (!existingProject) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
+    });
+    if (!user || existingProject.userId !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Update project status
@@ -29,15 +38,19 @@ export async function POST(
 
     // Generate script using AI
     const script = await generateScript(
-      project.prompt ?? project.title,
-      "general",
-      project.duration || 30
+      existingProject.prompt ?? existingProject.title,
+      existingProject.niche,
+      existingProject.duration || 30
     );
 
     // Update video with script
-    if (project.videos.length > 0) {
+    const videos = await db.video.findMany({
+      where: { projectId: id },
+    });
+
+    if (videos.length > 0) {
       await db.video.update({
-        where: { id: project.videos[0].id },
+        where: { id: videos[0].id },
         data: {
           script,
           status: "rendering",
