@@ -8,198 +8,80 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  avatar        String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  workspaces    WorkspaceMember[]
-  subscriptions Subscription[]
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String?
+  avatar          String?
+  plan            String    @default("free") // free, creator, pro, agency
+  stripeCustomerId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  projects        Project[]
+  subscriptions   Subscription[]
+  apiKeys         ApiKey[]
 }
 
-model Workspace {
-  id              String   @id @default(cuid())
-  name            String
-  type            String   @default("personal") // personal, family, company
-  autonomousLevel Int      @default(1) // 0=observe, 1=suggest, 2=act_with_confirm, 3=full_autonomous
-  trialStart      DateTime?
-  trialEnd        DateTime?
-  subscriptionTier String   @default("free") // free, professional, business
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  members         WorkspaceMember[]
-  tasks           Task[]
-  accounts        FinanceAccount[]
-  transactions    Transaction[]
-  budgetRules     BudgetRule[]
-  financialGoals  FinancialGoal[]
-  vaultDocuments  VaultDocument[]
-  memories        Memory[]
-  suggestions     Suggestion[]
-  agentLogs       AgentLog[]
-}
-
-model WorkspaceMember {
-  id              String   @id @default(cuid())
-  workspaceId     String
-  userId          String
-  alias           String?  // Ayah, Ibu, Anak, Manager
-  authorityLevel  Int      @default(1) // 1-5
-  energyLevel     Int      @default(70) // 0-100
-  stressLevel     Int      @default(30) // 0-100
-  constraints     String?  // JSON string for constraints
-  preferences     String?  // JSON string for preferences
-  visibilityScope String?  // JSON string for visibility
-  role            String   @default("member") // owner, admin, member
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([workspaceId, userId])
-}
-
-model Task {
+model Project {
   id           String   @id @default(cuid())
-  workspaceId  String
+  userId       String
   title        String
-  description  String?
-  timeCost     Int      @default(0) // minutes
-  energyCost   Int      @default(0) // 0-100
-  moneyCost    Float    @default(0)
-  priority     String   @default("medium") // low, medium, high, critical
-  status       String   @default("pending") // pending, approved, rejected, done
-  assignedTo   String?  // Member ID
-  dependencies String?  // JSON array of task IDs
-  dueDate      DateTime?
-  completedAt  DateTime?
-  aiRejected   Boolean  @default(false)
-  aiRejectionReason String?
+  prompt       String?
+  status       String   @default("draft") // draft, generating, rendering, completed, failed
+  videoUrl     String?
+  thumbnailUrl String?
+  duration     Int      @default(0) // seconds
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videos       Video[]
 }
 
-model FinanceAccount {
-  id          String   @id @default(cuid())
-  workspaceId String
-  name        String
-  type        String   @default("checking") // checking, savings, investment, cash, credit
-  balance     Float    @default(0)
-  currency    String   @default("USD")
-  isEmergency Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-}
-
-model Transaction {
-  id          String   @id @default(cuid())
-  workspaceId String
-  accountId   String?
-  amount      Float
-  category    String   @default("other") // food, transport, housing, health, education, entertainment, other
-  type        String   @default("expense") // income, expense, transfer
-  description String?
-  date        DateTime @default(now())
-  isRecurring Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-}
-
-model BudgetRule {
-  id          String   @id @default(cuid())
-  workspaceId String
-  category    String
-  limitAmount Float
-  period      String   @default("monthly") // weekly, monthly, yearly
-  priority    String   @default("medium") // low, medium, high, sacred
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-}
-
-model FinancialGoal {
-  id          String   @id @default(cuid())
-  workspaceId String
-  name        String
-  targetAmount Float
-  currentAmount Float @default(0)
-  deadline    DateTime?
-  priority    String   @default("medium")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-}
-
-model VaultDocument {
-  id          String   @id @default(cuid())
-  workspaceId String
-  title       String
-  type        String   @default("note") // note, pdf, image, audio, contract, rule
-  content     String?  // text content or file reference
-  priority    String   @default("medium") // low, medium, high
-  scope       String   @default("workspace") // workspace, family, personal
-  visibility  String?  // JSON array of member aliases
-  tags        String?  // JSON array of tags
-  metadata    String?  // JSON for extra metadata
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-}
-
-model Memory {
-  id          String   @id @default(cuid())
-  workspaceId String
-  layer       String   @default("short_term") // short_term, long_term, decision, emotional
-  category    String?
-  content     String
-  importance  Int      @default(5) // 1-10
-  expiresAt   DateTime?
-  createdAt   DateTime @default(now())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-}
-
-model Suggestion {
-  id          String   @id @default(cuid())
-  workspaceId String
-  type        String   @default("preventive") // preventive, corrective, strategic, behavioral
-  agentSource String   // which agent created this
-  title       String
-  reason      String
-  consequence String?
-  status      String   @default("pending") // pending, accepted, simulated, ignored
-  actionData  String?  // JSON for action details
-  createdAt   DateTime @default(now())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-}
-
-model AgentLog {
-  id          String   @id @default(cuid())
-  workspaceId String
-  agentType   String   // planner, finance, mediator, health, education, memory, executive
-  action      String
-  result      String?
-  reasoning   String?
-  autonomousLevel Int?
-  createdAt   DateTime @default(now())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+model Video {
+  id             String   @id @default(cuid())
+  projectId      String
+  script         String?
+  scenes         String   @default("[]") // JSON array of scene objects
+  subtitleStyle  String   @default("default")
+  voiceId        String   @default("alloy")
+  audioUrl       String?
+  renderProgress Int      @default(0) // 0-100
+  status         String   @default("pending") // pending, generating, rendering, completed, failed
+  createdAt      DateTime @default(now())
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model Subscription {
+  id                  String   @id @default(cuid())
+  userId              String
+  plan                String   @default("free") // free, creator, pro, agency
+  status              String   @default("active") // active, cancelled, expired, past_due
+  currentPeriodStart  DateTime @default(now())
+  currentPeriodEnd    DateTime?
+  cancelAtPeriodEnd   Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Template {
   id          String   @id @default(cuid())
-  userId      String
-  tier        String   @default("free") // free, professional, business
-  status      String   @default("active") // active, cancelled, expired
-  startDate   DateTime @default(now())
-  endDate     DateTime?
-  price       Float    @default(0)
-  period      String   @default("monthly") // monthly, yearly
+  name        String
+  category    String   // horror, motivation, crypto, anime, education
+  thumbnail   String?
+  description String?
+  isPremium   Boolean  @default(false)
+  config      String   @default("{}") // JSON config for template
+  usageCount  Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id        String    @id @default(cuid())
+  userId    String
+  key       String    @unique
+  name      String
+  lastUsed  DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -69,3 +69,10 @@ db/*.db-journal
 
 # Worklog
 worklog.md
+# Temp files
+temp/
+tmp/
+*.tmp
+
+# OS files
+Thumbs.db

@@ -1,24 +1,36 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import { Inter, JetBrains_Mono } from "next/font/google";
+import { ThemeProvider } from "next-themes";
+import { QueryClientProviderWrapper } from "@/components/providers/query-provider";
 import { Toaster } from "@/components/ui/sonner";
+import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Famlyzer AI - Autonomous Decision & Planning Intelligence",
-  description: "AI-powered system for managing time, money, energy, relationships, and life goals in one unified platform.",
-  keywords: ["Famlyzer", "AI", "Planning", "Finance", "Family", "Autonomous", "Decision Intelligence"],
+  title: "GhostStudio AI - One Prompt. Infinite Content.",
+  description:
+    "AI-powered faceless content empire generator. Create viral videos for TikTok, YouTube Shorts, and Instagram Reels with a single prompt.",
+  keywords: [
+    "GhostStudio",
+    "AI",
+    "Content Generator",
+    "Faceless",
+    "Video",
+    "TikTok",
+    "YouTube Shorts",
+    "Instagram Reels",
+  ],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/logo.svg",
   },
 };
 
@@ -28,12 +40,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className="dark">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased bg-background text-foreground`}
       >
-        {children}
-        <Toaster />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <QueryClientProviderWrapper>
+            {children}
+          </QueryClientProviderWrapper>
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              className: "bg-card text-card-foreground border-border",
+            }}
+          />
+        </ThemeProvider>
       </body>
     </html>
   );
