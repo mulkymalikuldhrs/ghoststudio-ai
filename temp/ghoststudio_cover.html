@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GhostStudio AI - Cover</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  @page {
+    size: 794px 1123px;
+    margin: 0;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 794px;
+    height: 1123px;
+    background: #f8f9fa;
+    font-family: 'Inter', sans-serif;
+  }
+
+  @media screen {
+    html { height: auto; display: flex; justify-content: center; }
+    body { transform-origin: top center; scale: min(1, calc(100vh / 1123)); margin: 0 auto; }
+  }
+
+  .cover-container {
+    position: relative;
+    width: 794px;
+    height: 1123px;
+  }
+
+  /* Layer 1 - Background */
+  .bg-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: hidden;
+  }
+
+  .bg-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(15, 23, 42, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15, 23, 42, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+
+  .bg-watermark {
+    position: absolute;
+    right: 10px;
+    top: 0.10 * 1123px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 220px;
+    font-weight: 900;
+    color: rgba(15, 23, 42, 0.03);
+    letter-spacing: -8px;
+    line-height: 1;
+    writing-mode: horizontal-tb;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  /* Layer 2 - Structure */
+  .struct-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+  }
+
+  .top-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 794px;
+    height: 8px;
+    background: linear-gradient(90deg, #0F172A, #1e293b);
+  }
+
+  .accent-line-v {
+    position: absolute;
+    left: 95px;
+    top: 280px;
+    width: 4px;
+    height: 320px;
+    background: linear-gradient(180deg, #0F172A, #0F172A00);
+  }
+
+  .accent-line-h {
+    position: absolute;
+    left: 95px;
+    top: 780px;
+    width: 300px;
+    height: 1px;
+    background: rgba(15, 23, 42, 0.2);
+  }
+
+  .corner-mark {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border-color: rgba(15, 23, 42, 0.12);
+    border-style: solid;
+    border-width: 0;
+  }
+
+  .corner-tl { top: 60px; left: 60px; border-top-width: 2px; border-left-width: 2px; }
+  .corner-tr { top: 60px; right: 60px; border-top-width: 2px; border-right-width: 2px; }
+  .corner-bl { bottom: 60px; left: 60px; border-bottom-width: 2px; border-left-width: 2px; }
+  .corner-br { bottom: 60px; right: 60px; border-bottom-width: 2px; border-right-width: 2px; }
+
+  /* Layer 3 - Content */
+  .content-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+  }
+
+  .kicker {
+    position: absolute;
+    top: 180px;
+    left: 115px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: rgba(15, 23, 42, 0.45);
+  }
+
+  .hero-title {
+    position: absolute;
+    top: 310px;
+    left: 115px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 64px;
+    font-weight: 800;
+    color: #0F172A;
+    line-height: 1.1;
+    letter-spacing: -2px;
+    max-width: 580px;
+  }
+
+  .hero-title .accent {
+    color: #1a8a7d;
+  }
+
+  .summary {
+    position: absolute;
+    top: 510px;
+    left: 115px;
+    font-family: 'Inter', sans-serif;
+    font-size: 17px;
+    font-weight: 400;
+    color: rgba(15, 23, 42, 0.65);
+    line-height: 1.7;
+    max-width: 460px;
+  }
+
+  .tagline {
+    position: absolute;
+    top: 660px;
+    left: 115px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 600;
+    color: #0F172A;
+    letter-spacing: 1px;
+    padding: 8px 16px;
+    border-left: 3px solid #1a8a7d;
+  }
+
+  .meta {
+    position: absolute;
+    bottom: 130px;
+    left: 115px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: rgba(15, 23, 42, 0.4);
+    line-height: 2.0;
+  }
+
+  .meta .label {
+    font-weight: 600;
+    color: rgba(15, 23, 42, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 11px;
+  }
+
+  .version-badge {
+    position: absolute;
+    bottom: 130px;
+    right: 80px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: rgba(15, 23, 42, 0.3);
+    text-align: right;
+    line-height: 2.0;
+  }
+</style>
+</head>
+<body>
+<div class="cover-container">
+  <!-- Layer 1 - Background -->
+  <div class="bg-layer">
+    <div class="bg-grid"></div>
+    <div class="bg-watermark">GHOST</div>
+  </div>
+
+  <!-- Layer 2 - Structure -->
+  <div class="struct-layer">
+    <div class="top-bar"></div>
+    <div class="accent-line-v"></div>
+    <div class="accent-line-h"></div>
+    <div class="corner-mark corner-tl"></div>
+    <div class="corner-mark corner-tr"></div>
+    <div class="corner-mark corner-bl"></div>
+    <div class="corner-mark corner-br"></div>
+  </div>
+
+  <!-- Layer 3 - Content -->
+  <div class="content-layer">
+    <div class="kicker">Project Specification Document</div>
+    <div class="hero-title">Ghost<span class="accent">Studio</span> AI</div>
+    <div class="summary">
+      AI Faceless Content Empire Generator. Mesin produksi konten viral otomatis yang mengubah satu prompt menjadi puluhan video shorts siap posting, tanpa kamera, tanpa wajah, tanpa batas.
+    </div>
+    <div class="tagline">&gt; One Prompt. Infinite Content.</div>
+    <div class="meta">
+      <div><span class="label">Author</span> &nbsp; Mulky Malikul Dhaher</div>
+      <div><span class="label">Date</span> &nbsp; May 2026</div>
+      <div><span class="label">Status</span> &nbsp; Final Draft</div>
+    </div>
+    <div class="version-badge">
+      <div>v1.0.0</div>
+      <div>PRD-2026-001</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
