@@ -1,23 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { requireAuth } from "@/lib/auth-guard";
 
-// GET /api/projects/[id] - Get a single project
+// GET /api/projects/[id] - Get project by ID
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    const auth = await requireAuth(request);
     const { id } = await params;
-    const project = await db.project.findUnique({
+
+    const project = await db.videoProject.findUnique({
       where: { id },
-      include: { videos: true },
+      include: {
+        scenes: { orderBy: { order: "asc" } },
+        assets: true,
+      },
     });
 
     if (!project) {
@@ -28,16 +27,17 @@ export async function GET(
     }
 
     // Verify ownership
-    const user = await db.user.findUnique({
-      where: { email: session.user.email },
-    });
-    if (!user || project.userId !== user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (project.userId !== auth.userId) {
+      return NextResponse.json(
+        { error: "You do not have access to this project", code: "FORBIDDEN" },
+        { status: 403 }
+      );
     }
 
-    return NextResponse.json({ project });
+    return NextResponse.json(project);
   } catch (error) {
-    console.error("Failed to fetch project:", error);
+    if (error instanceof NextResponse) return error;
+    console.error("Project get error:", error);
     return NextResponse.json(
       { error: "Failed to fetch project" },
       { status: 500 }
@@ -45,87 +45,36 @@ export async function GET(
   }
 }
 
-// PATCH /api/projects/[id] - Update a project
-export async function PATCH(
+// DELETE /api/projects/[id] - Delete project
+export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id } = await params;
-    const body = await request.json();
-
-    // Verify ownership
-    const existingProject = await db.project.findUnique({ where: { id } });
-    if (!existingProject) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
-
-    const user = await db.user.findUnique({
-      where: { email: session.user.email },
-    });
-    if (!user || existingProject.userId !== user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    // Only allow updating specific fields
-    const allowedFields = ["title", "prompt", "niche", "status", "videoUrl", "thumbnailUrl", "duration"];
-    const updateData: Record<string, unknown> = {};
-    for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        updateData[field] = body[field];
-      }
-    }
-
-    const project = await db.project.update({
-      where: { id },
-      data: updateData,
-    });
-
-    return NextResponse.json({ project });
-  } catch (error) {
-    console.error("Failed to update project:", error);
-    return NextResponse.json(
-      { error: "Failed to update project" },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE /api/projects/[id] - Delete a project
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    const auth = await requireAuth(request);
     const { id } = await params;
 
+    const existing = await db.videoProject.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Project not found" },
+        { status: 404 }
+      );
+    }
+
     // Verify ownership
-    const existingProject = await db.project.findUnique({ where: { id } });
-    if (!existingProject) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    if (existing.userId !== auth.userId) {
+      return NextResponse.json(
+        { error: "You do not have access to this project", code: "FORBIDDEN" },
+        { status: 403 }
+      );
     }
 
-    const user = await db.user.findUnique({
-      where: { email: session.user.email },
-    });
-    if (!user || existingProject.userId !== user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    await db.project.delete({ where: { id } });
-    return NextResponse.json({ success: true });
+    await db.videoProject.delete({ where: { id } });
+    return NextResponse.json({ message: "Project deleted" });
   } catch (error) {
-    console.error("Failed to delete project:", error);
+    if (error instanceof NextResponse) return error;
+    console.error("Project delete error:", error);
     return NextResponse.json(
       { error: "Failed to delete project" },
       { status: 500 }

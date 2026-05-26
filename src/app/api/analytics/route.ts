@@ -1,250 +1,184 @@
-/**
- * Analytics API
- * POST /api/analytics — Record analytics event and update memory
- * GET  /api/analytics — Get analytics summary (content performance, publish stats, etc.)
- */
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { requireAuth, requireWorkspaceAccess } from "@/lib/auth-guard";
+import { RecordAnalyticsSchema, formatZodErrors } from "@/lib/validators";
+import { getMemorySystem } from "@/lib/memory-system";
 
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { recordOutcome, getMemoryStats, detectPatterns } from '@/lib/memory-system';
-
-// ─── GET: Analytics Summary ──────────────────────────────────────────────────
-
+// GET /api/analytics - Get analytics data with comprehensive summary
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request);
+
     const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get('workspaceId');
-    const period = searchParams.get('period') || '7d'; // 1d, 7d, 30d, 90d
+    const workspaceId = searchParams.get("workspaceId");
+    const contentId = searchParams.get("contentId");
+    const metricType = searchParams.get("metricType");
+    const platform = searchParams.get("platform");
+    const days = parseInt(searchParams.get("days") || "30");
 
     if (!workspaceId) {
       return NextResponse.json(
-        { error: 'workspaceId is required' },
+        { error: "workspaceId is required" },
         { status: 400 }
       );
     }
 
-    // Calculate date range
-    const periodDays: Record<string, number> = {
-      '1d': 1,
-      '7d': 7,
-      '30d': 30,
-      '90d': 90,
+    // Verify workspace access
+    await requireWorkspaceAccess(request, workspaceId);
+
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const where: Record<string, unknown> = {
+      workspaceId,
+      capturedAt: { gte: since },
     };
-    const days = periodDays[period] || 7;
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    if (contentId) where.contentId = contentId;
+    if (metricType) where.metricType = metricType;
+    if (platform) where.platform = platform;
 
-    // Run all queries in parallel
-    const [
-      contentStats,
-      publishStats,
-      metricsByType,
-      topContent,
-      platformBreakdown,
-      recentEvents,
-      memoryStats,
-    ] = await Promise.all([
-      // Content stats by status
-      db.contentItem.groupBy({
-        by: ['status'],
-        where: {
-          workspaceId,
-          status: { not: 'archived' },
-        },
-        _count: { status: true },
-      }),
-
-      // Publish job stats
-      db.publishJob.groupBy({
-        by: ['status'],
-        where: {
-          workspaceId,
-          createdAt: { gte: since },
-        },
-        _count: { status: true },
-      }),
-
-      // Metrics by type
-      db.analyticsEvent.groupBy({
-        by: ['metricType'],
-        where: {
-          workspaceId,
-          capturedAt: { gte: since },
-        },
-        _sum: { metricValue: true },
-        _count: { metricType: true },
-        _avg: { metricValue: true },
-      }),
-
-      // Top performing content
-      db.contentItem.findMany({
-        where: {
-          workspaceId,
-          status: { not: 'archived' },
-          qualityScore: { gt: 0 },
-        },
-        orderBy: { qualityScore: 'desc' },
-        take: 10,
-        select: {
-          id: true,
-          title: true,
-          qualityScore: true,
-          humanicScore: true,
-          seoScore: true,
-          trustScore: true,
-          status: true,
-          publishedAt: true,
-        },
-      }),
-
-      // Platform breakdown
-      db.publishJob.groupBy({
-        by: ['platform'],
-        where: {
-          workspaceId,
-          createdAt: { gte: since },
-        },
-        _count: { platform: true },
-      }),
-
-      // Recent analytics events
+    const [events, contentCount, publishCount, topContent] = await Promise.all([
       db.analyticsEvent.findMany({
-        where: {
-          workspaceId,
-          capturedAt: { gte: since },
-        },
-        orderBy: { capturedAt: 'desc' },
-        take: 50,
-        include: {
-          contentItem: {
-            select: { id: true, title: true },
-          },
-        },
+        where,
+        orderBy: { capturedAt: "desc" },
+        take: 500,
       }),
-
-      // Memory stats
-      getMemoryStats(workspaceId),
+      db.contentItem.count({ where: { workspaceId } }),
+      db.publishJob.count({ where: { workspaceId, status: "published" } }),
+      db.contentItem.findMany({
+        where: { workspaceId, status: "published" },
+        orderBy: { qualityScore: "desc" },
+        take: 5,
+        select: { id: true, title: true, qualityScore: true, publishedAt: true },
+      }),
     ]);
 
-    // Calculate aggregate metrics
-    const totalContent = contentStats.reduce((sum, s) => sum + s._count.status, 0);
-    const publishedContent = contentStats.find((s) => s.status === 'published')?._count.status || 0;
-    const totalPublishJobs = publishStats.reduce((sum, s) => sum + s._count.status, 0);
-    const successfulPublishes = publishStats.find((s) => s.status === 'published')?._count.status || 0;
+    // Aggregate by metric type
+    const byMetric: Record<string, { total: number; count: number; avg: number }> = {};
+    for (const event of events) {
+      if (!byMetric[event.metricType]) {
+        byMetric[event.metricType] = { total: 0, count: 0, avg: 0 };
+      }
+      byMetric[event.metricType].total += event.metricValue;
+      byMetric[event.metricType].count += 1;
+    }
 
-    // Get patterns
-    const patterns = await detectPatterns(workspaceId);
+    for (const key of Object.keys(byMetric)) {
+      byMetric[key].avg =
+        Math.round((byMetric[key].total / byMetric[key].count) * 100) / 100;
+    }
 
-    console.log(`[Analytics API] Summary for ${workspaceId}: ${totalContent} content, ${totalPublishJobs} publish jobs (${period})`);
+    // Aggregate by platform
+    const byPlatform: Record<string, { count: number; totalValue: number }> = {};
+    for (const event of events) {
+      const p = event.platform || "unknown";
+      if (!byPlatform[p]) byPlatform[p] = { count: 0, totalValue: 0 };
+      byPlatform[p].count += 1;
+      byPlatform[p].totalValue += event.metricValue;
+    }
 
     return NextResponse.json({
-      workspaceId,
-      period,
-      since: since.toISOString(),
-      content: {
-        total: totalContent,
-        byStatus: contentStats.map((s) => ({
-          status: s.status,
-          count: s._count.status,
-        })),
-        published: publishedContent,
-        topPerforming: topContent,
+      events,
+      summary: byMetric,
+      byPlatform,
+      overview: {
+        totalEvents: events.length,
+        contentItems: contentCount,
+        publishedItems: publishCount,
+        topContent,
       },
-      publishing: {
-        totalJobs: totalPublishJobs,
-        successful: successfulPublishes,
-        successRate: totalPublishJobs > 0 ? Math.round((successfulPublishes / totalPublishJobs) * 100) : 0,
-        byStatus: publishStats.map((s) => ({
-          status: s.status,
-          count: s._count.status,
-        })),
-        byPlatform: platformBreakdown.map((p) => ({
-          platform: p.platform,
-          count: p._count.platform,
-        })),
-      },
-      metrics: metricsByType.map((m) => ({
-        type: m.metricType,
-        total: m._sum.metricValue || 0,
-        count: m._count.metricType,
-        average: m._avg.metricValue ? Math.round(m._avg.metricValue * 100) / 100 : 0,
-      })),
-      recentEvents,
-      memory: memoryStats,
-      patterns,
+      period: { days, since },
     });
   } catch (error) {
-    console.error('[Analytics API] GET error:', error);
+    if (error instanceof NextResponse) return error;
+    console.error("Analytics error:", error);
     return NextResponse.json(
-      { error: 'Failed to get analytics summary', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: "Failed to fetch analytics" },
       { status: 500 }
     );
   }
 }
 
-// ─── POST: Record Analytics Event ────────────────────────────────────────────
-
+// POST /api/analytics - Record analytics event with reinforcement learning
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const {
-      workspaceId,
-      contentId,
-      platform,
-      metricType,
-      metricValue,
-      rawPayload,
-      source = 'api',
-    } = body;
+    const auth = await requireAuth(request);
 
-    if (!workspaceId || !metricType || metricValue === undefined) {
+    const body = await request.json();
+    const validation = RecordAnalyticsSchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'workspaceId, metricType, and metricValue are required' },
+        { error: "Validation failed", details: formatZodErrors(validation.error) },
         { status: 400 }
       );
     }
 
-    // Create analytics event
+    const data = validation.data;
+
+    // Verify workspace access
+    await requireWorkspaceAccess(request, data.workspaceId);
+
     const event = await db.analyticsEvent.create({
       data: {
-        workspaceId,
-        contentId: contentId || null,
-        platform: platform || null,
-        metricType,
-        metricValue: parseFloat(String(metricValue)),
-        rawPayload: rawPayload ? JSON.stringify(rawPayload) : null,
-        source,
+        workspaceId: data.workspaceId,
+        contentId: data.contentId,
+        platform: data.platform,
+        metricType: data.metricType,
+        metricValue: data.metricValue,
+        rawPayload: data.rawPayload ? JSON.stringify(data.rawPayload) : null,
+        source: data.source,
       },
     });
 
-    // If contentId is provided, update memory based on the outcome
-    if (contentId && platform) {
-      try {
-        await recordOutcome(
-          workspaceId,
-          contentId,
-          platform,
-          metricType,
-          parseFloat(String(metricValue))
-        );
-      } catch (memoryError) {
-        console.warn('[Analytics API] Memory update failed (non-blocking):', memoryError);
+    // Wire to memory system for reinforcement learning
+    // Positive outcomes reinforce successful patterns in the memory system
+    try {
+      const memorySystem = getMemorySystem(data.workspaceId);
+
+      if (data.contentId && data.metricValue > 0) {
+        // Look up content tags and metadata for reinforcement
+        const content = await db.contentItem.findUnique({
+          where: { id: data.contentId },
+          include: { contentTags: true },
+        });
+
+        if (content) {
+          // Reinforce topic memories
+          if (content.topic) {
+            await memorySystem.learnFromAnalytics(data.metricType, data.metricValue, {
+              category: "topic",
+              key: content.topic,
+            });
+          }
+
+          // Reinforce format/style memories based on metric type
+          for (const tag of content.contentTags) {
+            await memorySystem.learnFromAnalytics(data.metricType, data.metricValue, {
+              category: tag.category,
+              key: tag.tag,
+            });
+          }
+
+          // Reinforce platform-specific memories
+          if (data.platform) {
+            await memorySystem.learnFromAnalytics(data.metricType, data.metricValue, {
+              category: "platform",
+              key: data.platform,
+            });
+          }
+        }
       }
+    } catch (memoryError) {
+      // Memory reinforcement failure should not prevent analytics recording
+      console.error("Memory reinforcement failed:", memoryError);
     }
 
-    console.log(`[Analytics API] Recorded ${metricType}=${metricValue} for workspace ${workspaceId}${contentId ? ` content ${contentId}` : ''}`);
-
-    return NextResponse.json(
-      {
-        success: true,
-        eventId: event.id,
-        memoryUpdated: !!contentId && !!platform,
-      },
-      { status: 201 }
-    );
+    return NextResponse.json(event, { status: 201 });
   } catch (error) {
-    console.error('[Analytics API] POST error:', error);
+    if (error instanceof NextResponse) return error;
+    console.error("Analytics create error:", error);
     return NextResponse.json(
-      { error: 'Failed to record analytics event', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: "Failed to record analytics event" },
       { status: 500 }
     );
   }

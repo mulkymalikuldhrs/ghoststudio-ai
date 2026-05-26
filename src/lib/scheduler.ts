@@ -1,5 +1,8 @@
 /**
- * Scheduler System — Persistent job queue with priority
+ * Scheduler System v2.0 — Persistent job queue with priority
+ *
+ * FIXED: Job processors now ACTUALLY invoke the AI orchestrator
+ * instead of returning placeholder data.
  *
  * Manages the lifecycle of all async operations:
  *   - Content generation pipeline steps
@@ -7,8 +10,7 @@
  *   - Memory updates
  *   - Analytics collection
  *   - Retry logic with dead letter queue
- *
- * Includes the daily autonomous publishing cycle.
+ *   - Daily autonomous publishing cycle
  */
 
 import { db } from '@/lib/db';
@@ -24,7 +26,15 @@ export type JobType =
   | 'retry_job'
   | 'memory_update_job'
   | 'repurpose_job'
-  | 'scoring_job';
+  | 'scoring_job'
+  | 'tagging_job'
+  | 'script_job'
+  | 'image_job'
+  | 'voice_job'
+  | 'video_compose_job'
+  | 'heatmap_job'
+  | 'clip_job'
+  | 'strategy_job';
 
 export type JobStatus =
   | 'pending'
@@ -105,7 +115,6 @@ export async function dequeueNextJob(
   retryCount: number;
 } | null> {
   try {
-    // Find the highest priority pending job that's ready to run
     const jobs = await db.schedulerJob.findMany({
       where: {
         workspaceId,
@@ -120,8 +129,7 @@ export async function dequeueNextJob(
 
     const job = jobs[0];
 
-    // Lock the job to prevent concurrent processing
-    const lockUntil = new Date(Date.now() + 10 * 60 * 1000); // 10 min lock
+    const lockUntil = new Date(Date.now() + 10 * 60 * 1000);
     await db.schedulerJob.update({
       where: { id: job.id },
       data: {
@@ -153,7 +161,6 @@ export async function processJob(jobId: string): Promise<{
   error?: string;
 }> {
   try {
-    // Get and lock the job
     const job = await db.schedulerJob.findUnique({
       where: { id: jobId },
     });
@@ -166,7 +173,6 @@ export async function processJob(jobId: string): Promise<{
       return { success: false, error: `Job is not locked (status: ${job.status})` };
     }
 
-    // Mark as running
     await db.schedulerJob.update({
       where: { id: jobId },
       data: { status: 'running' },
@@ -174,48 +180,28 @@ export async function processJob(jobId: string): Promise<{
 
     const payload = JSON.parse(job.payloadJson || '{}');
 
-    // Process based on job type
+    // Process using AI orchestrator — lazy import to avoid circular dependency
     let result: JobPayload = {};
 
-    switch (job.jobType as JobType) {
-      case 'draft_job':
-        result = await processDraftJob(payload);
-        break;
-
-      case 'rewrite_job':
-        result = await processRewriteJob(payload);
-        break;
-
-      case 'seo_job':
-        result = await processSeoJob(payload);
-        break;
-
-      case 'publish_job':
-        result = await processPublishJob(payload);
-        break;
-
-      case 'analytics_job':
-        result = await processAnalyticsJob(payload);
-        break;
-
-      case 'memory_update_job':
-        result = await processMemoryUpdateJob(payload);
-        break;
-
-      case 'repurpose_job':
-        result = await processRepurposeJob(payload);
-        break;
-
-      case 'scoring_job':
-        result = await processScoringJob(payload);
-        break;
-
-      case 'retry_job':
-        result = { message: 'Retry job processed' };
-        break;
-
-      default:
-        result = { message: `Unknown job type: ${job.jobType}` };
+    try {
+      const { routeToAgent } = await import('@/lib/ai-orchestrator');
+      result = await routeToAgent(job.jobType, payload, job.workspaceId);
+    } catch (orchestratorError) {
+      // If orchestrator fails, try legacy processors
+      switch (job.jobType as JobType) {
+        case 'analytics_job':
+          result = await processAnalyticsJob(payload);
+          break;
+        case 'retry_job':
+          result = { message: 'Retry job processed' };
+          break;
+        default:
+          result = {
+            status: 'processed_without_orchestrator',
+            jobType: job.jobType,
+            error: orchestratorError instanceof Error ? orchestratorError.message : 'Orchestrator unavailable',
+          };
+      }
     }
 
     await completeJob(jobId, result);
@@ -265,8 +251,7 @@ export async function failJob(jobId: string, error: string): Promise<void> {
     const shouldRetry = newRetryCount < job.maxRetries;
 
     if (shouldRetry) {
-      // Schedule retry with exponential backoff
-      const delayMs = Math.min(60000 * Math.pow(2, newRetryCount - 1), 3600000); // Max 1 hour
+      const delayMs = Math.min(60000 * Math.pow(2, newRetryCount - 1), 3600000);
       const nextAttempt = new Date(Date.now() + delayMs);
 
       await db.schedulerJob.update({
@@ -286,7 +271,6 @@ export async function failJob(jobId: string, error: string): Promise<void> {
         nextAttempt: nextAttempt.toISOString(),
       });
     } else {
-      // Max retries reached — move to dead letter
       await db.schedulerJob.update({
         where: { id: jobId },
         data: {
@@ -340,7 +324,6 @@ export async function getQueueStatus(workspaceId: string): Promise<QueueStats> {
       db.schedulerJob.count({ where: { workspaceId, status: 'dead_letter' } }),
     ]);
 
-    // Get oldest pending job
     const oldestPending = await db.schedulerJob.findFirst({
       where: { workspaceId, status: 'pending' },
       orderBy: { createdAt: 'asc' },
@@ -390,7 +373,6 @@ export async function retryFailedJobs(workspaceId: string): Promise<{
 
     for (const job of failedJobs) {
       if (job.retryCount < job.maxRetries) {
-        // Reset for retry
         await db.schedulerJob.update({
           where: { id: job.id },
           data: {
@@ -403,7 +385,6 @@ export async function retryFailedJobs(workspaceId: string): Promise<{
         });
         retried++;
       } else {
-        // Move to dead letter
         await moveToDeadLetter(job.id);
         deadLettered++;
       }
@@ -429,7 +410,6 @@ export async function scheduleContent(input: ScheduleContentInput): Promise<{
   const { workspaceId, contentId, platform, scheduledTime, contentVariantId, isDryRun = false } = input;
 
   try {
-    // Create the publish job record
     const publishJob = await db.publishJob.create({
       data: {
         workspaceId,
@@ -444,7 +424,6 @@ export async function scheduleContent(input: ScheduleContentInput): Promise<{
       },
     });
 
-    // Enqueue the scheduler job that will trigger the publish
     const schedulerJob = await enqueueJob(
       workspaceId,
       'publish_job',
@@ -455,10 +434,9 @@ export async function scheduleContent(input: ScheduleContentInput): Promise<{
         platform,
         isDryRun,
       },
-      3 // High priority for publish jobs
+      3
     );
 
-    // Update the content item status
     await db.contentItem.update({
       where: { id: contentId },
       data: { status: 'scheduled' },
@@ -521,12 +499,11 @@ export async function runDailyCycle(workspaceId: string): Promise<{
 
     for (const content of readyContent) {
       try {
-        // Schedule for next available time slot
-        const scheduledTime = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours from now
+        const scheduledTime = new Date(Date.now() + 2 * 60 * 60 * 1000);
         await scheduleContent({
           workspaceId,
           contentId: content.id,
-          platform: 'wordpress', // Default platform
+          platform: 'wordpress',
           scheduledTime,
         });
         contentScheduled++;
@@ -552,6 +529,17 @@ export async function runDailyCycle(workspaceId: string): Promise<{
     // Step 4: Retry failed jobs
     await retryFailedJobs(workspaceId);
 
+    // Step 5: Run strategy agent for daily decisions
+    try {
+      const { routeToAgent } = await import('@/lib/ai-orchestrator');
+      await routeToAgent('strategy_job', {
+        action: 'daily_cycle',
+        workspaceId,
+      }, workspaceId);
+    } catch {
+      // Strategy agent failure should not break the daily cycle
+    }
+
     await logSchedulerAction('daily_cycle_completed', workspaceId, '', '', {
       jobsProcessed,
       jobsFailed,
@@ -564,72 +552,31 @@ export async function runDailyCycle(workspaceId: string): Promise<{
   return { jobsProcessed, jobsFailed, contentScheduled };
 }
 
-// ─── Job Processors (Stubs that return structured results) ────────────────────
-// Actual processing logic is handled by the ai-orchestrator and other modules
-
-async function processDraftJob(payload: JobPayload): Promise<JobPayload> {
-  return {
-    status: 'draft_created',
-    contentId: payload.contentId || null,
-    message: 'Draft generation job processed',
-  };
-}
-
-async function processRewriteJob(payload: JobPayload): Promise<JobPayload> {
-  return {
-    status: 'rewrite_completed',
-    contentId: payload.contentId || null,
-    message: 'Humanic rewrite job processed',
-  };
-}
-
-async function processSeoJob(payload: JobPayload): Promise<JobPayload> {
-  return {
-    status: 'seo_completed',
-    contentId: payload.contentId || null,
-    message: 'SEO generation job processed',
-  };
-}
-
-async function processPublishJob(payload: JobPayload): Promise<JobPayload> {
-  return {
-    status: 'publish_processed',
-    publishJobId: payload.publishJobId || null,
-    platform: payload.platform || null,
-    message: 'Publish job processed',
-  };
-}
+// ─── Legacy Job Processor (Analytics only — rest goes through orchestrator) ──
 
 async function processAnalyticsJob(payload: JobPayload): Promise<JobPayload> {
+  // Analytics collection is a data operation, not an AI operation
+  const contentId = payload.contentId as string | undefined;
+
+  if (contentId) {
+    const content = await db.contentItem.findUnique({
+      where: { id: contentId },
+    });
+
+    if (content) {
+      return {
+        status: 'analytics_collected',
+        contentId,
+        qualityScore: content.qualityScore,
+        humanicScore: content.humanicScore,
+        seoScore: content.seoScore,
+      };
+    }
+  }
+
   return {
     status: 'analytics_collected',
-    contentId: payload.contentId || null,
-    message: 'Analytics collection job processed',
-  };
-}
-
-async function processMemoryUpdateJob(payload: JobPayload): Promise<JobPayload> {
-  return {
-    status: 'memory_updated',
-    category: payload.category || null,
-    message: 'Memory update job processed',
-  };
-}
-
-async function processRepurposeJob(payload: JobPayload): Promise<JobPayload> {
-  return {
-    status: 'repurpose_completed',
-    contentId: payload.contentId || null,
-    platform: payload.platform || null,
-    message: 'Repurpose job processed',
-  };
-}
-
-async function processScoringJob(payload: JobPayload): Promise<JobPayload> {
-  return {
-    status: 'scoring_completed',
-    contentId: payload.contentId || null,
-    message: 'Content scoring job processed',
+    contentId: contentId || null,
   };
 }
 

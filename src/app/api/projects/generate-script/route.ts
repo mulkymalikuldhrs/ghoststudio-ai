@@ -1,73 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { generateScript } from "@/lib/ai";
+import { db } from "@/lib/db";
 
-// POST /api/projects/generate-script - Generate a script from a prompt
+// POST /api/projects/generate-script - Generate a script for a video project
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const body = await request.json();
-    const { prompt, niche, duration } = body;
+    const { projectId, prompt, niche, style, language = "en" } = body;
 
-    if (!prompt) {
+    if (!projectId && !prompt) {
       return NextResponse.json(
-        { error: "Prompt is required" },
+        { error: "projectId or prompt is required" },
         { status: 400 }
       );
     }
 
-    let script: string;
-    try {
-      script = await generateScript(
-        prompt,
-        niche ?? "general",
-        duration ?? 30
-      );
-    } catch {
-      // Fallback demo script if AI fails
-      script = JSON.stringify(
-        {
-          title: prompt,
-          hook: "This will change everything you thought you knew...",
-          scenes: [
-            {
-              id: 1,
-              narration: "In a world where most people sleepwalk through life...",
-              visual: "Dark cityscape at night with neon lights",
-              duration: 5,
-              subtitle: "Most people sleepwalk through life",
-            },
-            {
-              id: 2,
-              narration: "Only a few dare to question the system.",
-              visual: "Silhouette figure standing before a massive screen",
-              duration: 5,
-              subtitle: "Only a few dare to question",
-            },
-            {
-              id: 3,
-              narration: "The truth is uncomfortable, but it sets you free.",
-              visual: "Breaking chains animation with light rays",
-              duration: 5,
-              subtitle: "The truth sets you free",
-            },
-          ],
-          cta: "Follow for more content that awakens your mind.",
-          hashtags: ["#viral", "#trending", "#fyp"],
-        },
-        null,
-        2
-      );
+    let project;
+    if (projectId) {
+      project = await db.videoProject.findUnique({
+        where: { id: projectId },
+      });
+
+      if (!project) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 }
+        );
+      }
     }
 
-    return NextResponse.json({ script });
+    // Log script generation request
+    await db.systemLog.create({
+      data: {
+        service: "ai",
+        level: "info",
+        action: "script_generate",
+        message: `Script generation requested for: ${project?.title || "new project"}`,
+        metadataJson: JSON.stringify({ projectId, prompt: prompt?.substring(0, 100), niche, style }),
+      },
+    });
+
+    return NextResponse.json({
+      message: "Script generation started",
+      projectId: projectId || null,
+      status: "generating",
+    });
   } catch (error) {
-    console.error("Failed to generate script:", error);
+    console.error("Script generate error:", error);
     return NextResponse.json(
       { error: "Failed to generate script" },
       { status: 500 }

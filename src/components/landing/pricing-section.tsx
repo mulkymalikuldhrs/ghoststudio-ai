@@ -3,9 +3,16 @@
 import { motion } from "framer-motion";
 import { Check, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { STRIPE_PLANS, type PlanType } from "@/lib/stripe";
+import { PLAN_CONFIG, type PlanType } from "@/lib/stripe";
 
 const planOrder: PlanType[] = ["free", "creator", "pro", "agency"];
+
+const planFeatures: Record<PlanType, string[]> = {
+  free: ["3 video projects", "10 content items", "5 publish jobs", "Basic templates"],
+  creator: ["25 video projects", "100 content items", "50 publish jobs", "Premium templates", "Priority support"],
+  pro: ["Unlimited projects", "Unlimited content", "Full AI pipeline", "Custom templates", "API access", "Priority support"],
+  agency: ["Unlimited everything", "Custom agents", "Dedicated support", "SLA guarantee", "White-label", "API access"],
+};
 
 const planHighlights: Record<string, string> = {
   free: "",
@@ -40,7 +47,7 @@ export function PricingSection() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {planOrder.map((planId, index) => {
-            const plan = STRIPE_PLANS[planId];
+            const plan = PLAN_CONFIG[planId];
             const highlight = planHighlights[planId];
             const isPro = planId === "pro";
 
@@ -82,7 +89,7 @@ export function PricingSection() {
                 </div>
 
                 <ul className="space-y-3 mb-8">
-                  {plan.features.map((feature) => (
+                  {planFeatures[planId].map((feature) => (
                     <li key={feature} className="flex items-start gap-2">
                       <Check
                         className={`w-4 h-4 mt-0.5 shrink-0 ${

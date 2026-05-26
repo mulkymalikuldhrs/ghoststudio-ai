@@ -1,97 +1,120 @@
-/**
- * Scheduler Process API
- * POST /api/scheduler/process — Process next job in queue
- * POST with { action: 'retry_failed' }  — Retry all failed jobs
- * POST with { action: 'daily_cycle' }   — Run daily autonomous cycle
- */
-
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth, requireWorkspaceAccess } from "@/lib/auth-guard";
+import { ProcessSchedulerSchema, formatZodErrors } from "@/lib/validators";
 import {
-  dequeueNextJob,
   processJob,
+  dequeueNextJob,
   retryFailedJobs,
   runDailyCycle,
-} from '@/lib/scheduler';
+} from "@/lib/scheduler";
+import { routeToAgent } from "@/lib/ai-orchestrator";
+import { db } from "@/lib/db";
 
+// POST /api/scheduler/process - Process scheduler jobs
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth(request);
+
     const body = await request.json();
-    const { workspaceId, action } = body;
-
-    // ─── Daily Autonomous Cycle ──────────────────────────────────────────
-    if (action === 'daily_cycle') {
-      if (!workspaceId) {
-        return NextResponse.json(
-          { error: 'workspaceId is required for daily_cycle' },
-          { status: 400 }
-        );
-      }
-
-      console.log(`[Scheduler Process API] Running daily cycle for workspace ${workspaceId}`);
-
-      const result = await runDailyCycle(workspaceId);
-
-      return NextResponse.json({
-        success: true,
-        action: 'daily_cycle',
-        ...result,
-      });
-    }
-
-    // ─── Retry Failed Jobs ───────────────────────────────────────────────
-    if (action === 'retry_failed') {
-      if (!workspaceId) {
-        return NextResponse.json(
-          { error: 'workspaceId is required for retry_failed' },
-          { status: 400 }
-        );
-      }
-
-      console.log(`[Scheduler Process API] Retrying failed jobs for workspace ${workspaceId}`);
-
-      const result = await retryFailedJobs(workspaceId);
-
-      return NextResponse.json({
-        success: true,
-        action: 'retry_failed',
-        ...result,
-      });
-    }
-
-    // ─── Process Next Job ────────────────────────────────────────────────
-    if (!workspaceId) {
+    const validation = ProcessSchedulerSchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'workspaceId is required' },
+        { error: "Validation failed", details: formatZodErrors(validation.error) },
         { status: 400 }
       );
     }
 
-    const job = await dequeueNextJob(workspaceId);
+    const { action, workspaceId, jobId } = validation.data;
 
-    if (!job) {
-      return NextResponse.json({
-        success: true,
-        message: 'No pending jobs in queue',
-        processed: false,
-      });
+    // Verify workspace access
+    await requireWorkspaceAccess(request, workspaceId);
+
+    switch (action) {
+      case "process": {
+        // Process a specific job or the next available job
+        if (jobId) {
+          // Lock the job first
+          const job = await db.schedulerJob.findUnique({ where: { id: jobId } });
+          if (!job) {
+            return NextResponse.json(
+              { error: "Job not found" },
+              { status: 404 }
+            );
+          }
+          if (job.workspaceId !== workspaceId) {
+            return NextResponse.json(
+              { error: "Job does not belong to this workspace" },
+              { status: 403 }
+            );
+          }
+
+          // Lock the job
+          const lockUntil = new Date(Date.now() + 10 * 60 * 1000);
+          await db.schedulerJob.update({
+            where: { id: jobId },
+            data: {
+              status: "locked",
+              lockedBy: `worker-${Date.now()}`,
+              lockUntil,
+            },
+          });
+
+          const result = await processJob(jobId);
+
+          return NextResponse.json({
+            message: result.success ? "Job processed successfully" : "Job processing failed",
+            jobId,
+            result,
+          });
+        } else {
+          // Dequeue and process the next available job
+          const job = await dequeueNextJob(workspaceId);
+          if (!job) {
+            return NextResponse.json({ message: "No jobs to process" });
+          }
+
+          const result = await processJob(job.id);
+
+          return NextResponse.json({
+            message: result.success ? "Job processed successfully" : "Job processing failed",
+            jobId: job.id,
+            jobType: job.jobType,
+            result,
+          });
+        }
+      }
+
+      case "retry_failed": {
+        // Retry all failed jobs in the workspace
+        const retryResult = await retryFailedJobs(workspaceId);
+
+        return NextResponse.json({
+          message: "Failed jobs retry completed",
+          ...retryResult,
+        });
+      }
+
+      case "daily_cycle": {
+        // Run the full daily autonomous cycle
+        const cycleResult = await runDailyCycle(workspaceId);
+
+        return NextResponse.json({
+          message: "Daily cycle completed",
+          ...cycleResult,
+        });
+      }
+
+      default:
+        return NextResponse.json(
+          { error: `Unsupported action: ${action}` },
+          { status: 400 }
+        );
     }
-
-    console.log(`[Scheduler Process API] Processing job ${job.id} (${job.jobType})`);
-
-    const result = await processJob(job.id);
-
-    return NextResponse.json({
-      success: result.success,
-      processed: true,
-      jobId: job.id,
-      jobType: job.jobType,
-      result: result.result || null,
-      error: result.error || null,
-    });
   } catch (error) {
-    console.error('[Scheduler Process API] POST error:', error);
+    if (error instanceof NextResponse) return error;
+    console.error("Scheduler process error:", error);
     return NextResponse.json(
-      { error: 'Failed to process scheduler job', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: "Failed to process scheduler job" },
       { status: 500 }
     );
   }

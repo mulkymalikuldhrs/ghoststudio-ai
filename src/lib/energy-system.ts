@@ -1,173 +1,127 @@
-/**
- * Energy System — Track fatigue, saturation, and exhaustion
- *
- * Prevents content exhaustion by monitoring:
- *   - Topic fatigue: Publishing too much on the same topic
- *   - Tone fatigue: Repetitive voice/style
- *   - Publish saturation: Too many posts in a time window
- *   - Hook repetition: Reusing the same hooks
- *   - Audience exhaustion: Overwhelming the audience
- *
- * Fatigue scores range from 0 (fresh) to 100 (exhausted).
- * When thresholds are exceeded, the system recommends pausing.
- */
+// Energy System — Fatigue tracking and prevention
+// Tracks: topic fatigue, tone fatigue, publish saturation, audience exhaustion, hook repetition
+// Prevents content decay and creator/audience burnout
 
-import { db } from '@/lib/db';
-
-// ─── Type Definitions ────────────────────────────────────────────────────────
+import { db } from "@/lib/db";
 
 export type EnergyCategory =
-  | 'topic_fatigue'
-  | 'tone_fatigue'
-  | 'publish_saturation'
-  | 'audience_exhaustion'
-  | 'hook_repetition';
-
-export interface FatigueEntry {
-  id: string;
-  category: string;
-  topic: string | null;
-  fatigueScore: number;
-  publishCount: number;
-  lastResetAt: Date;
-}
-
-export interface EnergyReport {
-  workspaceId: string;
-  overallEnergy: number; // 0 (depleted) to 100 (full)
-  categories: Array<{
-    category: string;
-    fatigueScore: number;
-    publishCount: number;
-    status: 'fresh' | 'moderate' | 'tired' | 'exhausted';
-    shouldPause: boolean;
-  }>;
-  recommendations: string[];
-  canPublish: boolean;
-}
+  | "topic_fatigue"
+  | "tone_fatigue"
+  | "publish_saturation"
+  | "audience_exhaustion"
+  | "hook_repetition"
+  | "visual_fatigue";
 
 export interface EnergyStatus {
-  category: string;
-  topic?: string | null;
+  overall: number;          // 0-100 average fatigue
+  status: "healthy" | "moderate" | "warning" | "critical";
+  categories: EnergyCategoryStatus[];
+  recommendations: string[];
+}
+
+export interface EnergyCategoryStatus {
+  category: EnergyCategory;
+  topic?: string;
   fatigueScore: number;
   publishCount: number;
-  status: 'fresh' | 'moderate' | 'tired' | 'exhausted';
-  shouldPause: boolean;
+  label: string;
+  color: string;
 }
 
-// ─── Threshold Configuration ─────────────────────────────────────────────────
-
-export const FATIGUE_THRESHOLDS = {
-  topic_fatigue: {
-    moderate: 30,
-    tired: 60,
-    exhausted: 80,
-  },
-  tone_fatigue: {
-    moderate: 30,
-    tired: 55,
-    exhausted: 75,
-  },
-  publish_saturation: {
-    moderate: 25,
-    tired: 50,
-    exhausted: 75,
-  },
-  audience_exhaustion: {
-    moderate: 35,
-    tired: 60,
-    exhausted: 85,
-  },
-  hook_repetition: {
-    moderate: 30,
-    tired: 55,
-    exhausted: 70,
-  },
+// Fatigue thresholds
+const THRESHOLDS = {
+  healthy: 30,
+  moderate: 50,
+  warning: 70,
+  critical: 85,
 };
 
-// Score increment per publish action
-const FATIGUE_INCREMENT: Record<EnergyCategory, number> = {
+// Fatigue increase per publish
+const FATIGUE_INCREMENT = {
   topic_fatigue: 15,
-  tone_fatigue: 12,
-  publish_saturation: 10,
-  audience_exhaustion: 8,
+  tone_fatigue: 10,
+  publish_saturation: 8,
+  audience_exhaustion: 12,
   hook_repetition: 18,
+  visual_fatigue: 14,
 };
 
-// Natural decay per hour (fatigue decreases over time)
-const FATIGUE_DECAY_RATE: Record<EnergyCategory, number> = {
-  topic_fatigue: 2,    // Loses 2 fatigue points per hour
-  tone_fatigue: 3,     // Tone fatigue recovers faster
-  publish_saturation: 1.5,
-  audience_exhaustion: 1,
-  hook_repetition: 4,  // Hook fatigue recovers fastest
-};
+// Natural fatigue decay per hour
+const FATIGUE_DECAY_RATE = 0.5;
 
-// ─── Track Topic Fatigue ─────────────────────────────────────────────────────
+export class EnergySystem {
+  private workspaceId: string;
 
-export async function trackTopicFatigue(
-  workspaceId: string,
-  topic: string
-): Promise<EnergyStatus> {
-  return trackEnergy(workspaceId, 'topic_fatigue', topic);
-}
+  constructor(workspaceId: string) {
+    this.workspaceId = workspaceId;
+  }
 
-// ─── Track Tone Fatigue ──────────────────────────────────────────────────────
+  // Get current energy status
+  async getStatus(): Promise<EnergyStatus> {
+    const entries = await db.energyEntry.findMany({
+      where: { workspaceId: this.workspaceId },
+    });
 
-export async function trackToneFatigue(
-  workspaceId: string,
-  tone: string
-): Promise<EnergyStatus> {
-  return trackEnergy(workspaceId, 'tone_fatigue', tone);
-}
+    if (entries.length === 0) {
+      return {
+        overall: 0,
+        status: "healthy",
+        categories: [],
+        recommendations: ["Energy system is fresh — start publishing!"],
+      };
+    }
 
-// ─── Track Publish Saturation ────────────────────────────────────────────────
+    // Apply time-based decay
+    await this.applyDecay(entries);
 
-export async function trackPublishSaturation(
-  workspaceId: string
-): Promise<EnergyStatus> {
-  return trackEnergy(workspaceId, 'publish_saturation', 'global');
-}
+    // Refresh entries after decay
+    const freshEntries = await db.energyEntry.findMany({
+      where: { workspaceId: this.workspaceId },
+    });
 
-// ─── Track Hook Repetition ───────────────────────────────────────────────────
+    // Calculate overall fatigue
+    const avgFatigue =
+      freshEntries.reduce((sum, e) => sum + e.fatigueScore, 0) / freshEntries.length;
 
-export async function trackHookRepetition(
-  workspaceId: string,
-  hook: string
-): Promise<EnergyStatus> {
-  return trackEnergy(workspaceId, 'hook_repetition', hook);
-}
+    let status: EnergyStatus["status"];
+    if (avgFatigue >= THRESHOLDS.critical) status = "critical";
+    else if (avgFatigue >= THRESHOLDS.warning) status = "warning";
+    else if (avgFatigue >= THRESHOLDS.moderate) status = "moderate";
+    else status = "healthy";
 
-// ─── Core Track Energy ───────────────────────────────────────────────────────
+    const categories = freshEntries.map((entry) => ({
+      category: entry.category as EnergyCategory,
+      topic: entry.topic || undefined,
+      fatigueScore: entry.fatigueScore,
+      publishCount: entry.publishCount,
+      label: this.getCategoryLabel(entry.category),
+      color: this.getFatigueColor(entry.fatigueScore),
+    }));
 
-async function trackEnergy(
-  workspaceId: string,
-  category: EnergyCategory | string,
-  topic: string
-): Promise<EnergyStatus> {
-  try {
-    // Find or create the energy entry
+    const recommendations = this.generateRecommendations(categories);
+
+    return {
+      overall: Math.round(avgFatigue * 10) / 10,
+      status,
+      categories,
+      recommendations,
+    };
+  }
+
+  // Record a publish event — increases fatigue
+  async recordPublish(category: EnergyCategory, topic?: string): Promise<void> {
     const existing = await db.energyEntry.findFirst({
       where: {
-        workspaceId,
+        workspaceId: this.workspaceId,
         category,
-        topic,
+        topic: topic || null,
       },
     });
 
-    const now = new Date();
-    const increment = FATIGUE_INCREMENT[category as EnergyCategory] || 10;
-    const decayRate = FATIGUE_DECAY_RATE[category as EnergyCategory] || 2;
+    const increment = FATIGUE_INCREMENT[category];
 
     if (existing) {
-      // Apply time-based decay since last update
-      const hoursSinceUpdate = (now.getTime() - existing.updatedAt.getTime()) / (1000 * 60 * 60);
-      const decayAmount = hoursSinceUpdate * decayRate;
-
-      // Calculate new fatigue score: decay first, then increment
-      const decayedScore = Math.max(0, existing.fatigueScore - decayAmount);
-      const newScore = Math.min(100, decayedScore + increment);
-
+      const newScore = Math.min(100, existing.fatigueScore + increment);
       await db.energyEntry.update({
         where: { id: existing.id },
         data: {
@@ -175,464 +129,152 @@ async function trackEnergy(
           publishCount: existing.publishCount + 1,
         },
       });
-
-      const status = getEnergyStatus(category, newScore);
-
-      await logEnergyAction('energy_tracked', workspaceId, category, topic, {
-        previousScore: existing.fatigueScore,
-        newScore,
-        decayApplied: decayAmount,
-        increment,
-      });
-
-      return {
-        category,
-        topic,
-        fatigueScore: newScore,
-        publishCount: existing.publishCount + 1,
-        status: status.status,
-        shouldPause: status.shouldPause,
-      };
     } else {
-      // Create new entry
-      const entry = await db.energyEntry.create({
+      await db.energyEntry.create({
         data: {
-          workspaceId,
+          workspaceId: this.workspaceId,
           category,
           topic,
           fatigueScore: increment,
           publishCount: 1,
-          lastResetAt: now,
         },
       });
-
-      const status = getEnergyStatus(category, increment);
-
-      await logEnergyAction('energy_created', workspaceId, category, topic, {
-        initialScore: increment,
-      });
-
-      return {
-        category,
-        topic,
-        fatigueScore: increment,
-        publishCount: 1,
-        status: status.status,
-        shouldPause: status.shouldPause,
-      };
-    }
-  } catch (error) {
-    await logEnergyError('energy_track_failed', workspaceId, category, topic, error);
-    return {
-      category,
-      topic,
-      fatigueScore: 0,
-      publishCount: 0,
-      status: 'fresh',
-      shouldPause: false,
-    };
-  }
-}
-
-// ─── Get Fatigue Level ───────────────────────────────────────────────────────
-
-export async function getFatigueLevel(
-  workspaceId: string,
-  category: string,
-  topic?: string
-): Promise<EnergyStatus> {
-  try {
-    const whereClause: Record<string, unknown> = {
-      workspaceId,
-      category,
-    };
-
-    if (topic) {
-      whereClause.topic = topic;
     }
 
-    const entries = await db.energyEntry.findMany({
-      where: whereClause,
+    // Log the energy event
+    await db.systemLog.create({
+      data: {
+        service: "energy",
+        level: "info",
+        action: "fatigue_increase",
+        message: `Fatigue increased for ${category}${topic ? ` (${topic})` : ""}`,
+        metadataJson: JSON.stringify({ category, topic }),
+      },
     });
+  }
 
-    if (entries.length === 0) {
-      return {
+  // Check if a publish is advisable
+  async canPublish(category: EnergyCategory, topic?: string): Promise<boolean> {
+    const entry = await db.energyEntry.findFirst({
+      where: {
+        workspaceId: this.workspaceId,
         category,
         topic: topic || null,
-        fatigueScore: 0,
-        publishCount: 0,
-        status: 'fresh',
-        shouldPause: false,
-      };
-    }
-
-    // Apply decay to get current fatigue
-    const now = new Date();
-    const decayRate = FATIGUE_DECAY_RATE[category as EnergyCategory] || 2;
-
-    let totalFatigue = 0;
-    let totalCount = 0;
-
-    for (const entry of entries) {
-      const hoursSinceUpdate = (now.getTime() - entry.updatedAt.getTime()) / (1000 * 60 * 60);
-      const decayAmount = hoursSinceUpdate * decayRate;
-      const currentFatigue = Math.max(0, entry.fatigueScore - decayAmount);
-      totalFatigue += currentFatigue;
-      totalCount += entry.publishCount;
-    }
-
-    const avgFatigue = totalFatigue / entries.length;
-    const status = getEnergyStatus(category, avgFatigue);
-
-    return {
-      category,
-      topic: topic || null,
-      fatigueScore: Math.round(avgFatigue * 100) / 100,
-      publishCount: totalCount,
-      status: status.status,
-      shouldPause: status.shouldPause,
-    };
-  } catch (error) {
-    await logEnergyError('fatigue_level_failed', workspaceId, category, topic || '', error);
-    return {
-      category,
-      topic: topic || null,
-      fatigueScore: 0,
-      publishCount: 0,
-      status: 'fresh',
-      shouldPause: false,
-    };
-  }
-}
-
-// ─── Should Pause ────────────────────────────────────────────────────────────
-
-export async function shouldPause(
-  workspaceId: string,
-  category: string
-): Promise<boolean> {
-  const fatigue = await getFatigueLevel(workspaceId, category);
-  return fatigue.shouldPause;
-}
-
-// ─── Reset Fatigue ───────────────────────────────────────────────────────────
-
-export async function resetFatigue(
-  workspaceId: string,
-  category: string,
-  topic?: string
-): Promise<{ reset: number }> {
-  try {
-    const whereClause: Record<string, unknown> = {
-      workspaceId,
-      category,
-    };
-
-    if (topic) {
-      whereClause.topic = topic;
-    }
-
-    const result = await db.energyEntry.updateMany({
-      where: whereClause,
-      data: {
-        fatigueScore: 0,
-        publishCount: 0,
-        lastResetAt: new Date(),
       },
     });
 
-    await logEnergyAction('fatigue_reset', workspaceId, category, topic || 'all', {
-      resetCount: result.count,
-    });
-
-    return { reset: result.count };
-  } catch (error) {
-    await logEnergyError('fatigue_reset_failed', workspaceId, category, topic || '', error);
-    return { reset: 0 };
+    if (!entry) return true;
+    return entry.fatigueScore < THRESHOLDS.critical;
   }
-}
 
-// ─── Get Energy Report ───────────────────────────────────────────────────────
+  // Get the optimal publishing schedule based on energy levels
+  async getOptimalSchedule(): Promise<{
+    recommendedActions: string[];
+    avoidTopics: string[];
+    cooldownMinutes: number;
+  }> {
+    const status = await this.getStatus();
 
-export async function getEnergyReport(workspaceId: string): Promise<EnergyReport> {
-  try {
-    const categories: EnergyCategory[] = [
-      'topic_fatigue',
-      'tone_fatigue',
-      'publish_saturation',
-      'audience_exhaustion',
-      'hook_repetition',
-    ];
+    const recommendedActions: string[] = [];
+    const avoidTopics: string[] = [];
 
-    const categoryStatuses: EnergyReport['categories'] = [];
-
-    for (const category of categories) {
-      const fatigue = await getFatigueLevel(workspaceId, category);
-      categoryStatuses.push({
-        category,
-        fatigueScore: fatigue.fatigueScore,
-        publishCount: fatigue.publishCount,
-        status: fatigue.status,
-        shouldPause: fatigue.shouldPause,
-      });
-    }
-
-    // Calculate overall energy (inverse of average fatigue)
-    const avgFatigue =
-      categoryStatuses.reduce((sum, c) => sum + c.fatigueScore, 0) / categoryStatuses.length;
-    const overallEnergy = Math.round(100 - avgFatigue);
-
-    // Generate recommendations
-    const recommendations = generateRecommendations(categoryStatuses);
-
-    // Determine if publishing is possible
-    const exhaustedCount = categoryStatuses.filter((c) => c.status === 'exhausted').length;
-    const canPublish = exhaustedCount < 2; // Allow publishing if fewer than 2 categories are exhausted
-
-    return {
-      workspaceId,
-      overallEnergy,
-      categories: categoryStatuses,
-      recommendations,
-      canPublish,
-    };
-  } catch (error) {
-    await logEnergyError('energy_report_failed', workspaceId, '', '', error);
-    return {
-      workspaceId,
-      overallEnergy: 100,
-      categories: [],
-      recommendations: ['Unable to generate energy report'],
-      canPublish: true,
-    };
-  }
-}
-
-// ─── Apply Natural Decay ─────────────────────────────────────────────────────
-
-export async function applyNaturalDecay(workspaceId: string): Promise<{
-  entriesDecayed: number;
-}> {
-  try {
-    const entries = await db.energyEntry.findMany({
-      where: {
-        workspaceId,
-        fatigueScore: { gt: 0 },
-      },
-    });
-
-    const now = new Date();
-    let entriesDecayed = 0;
-
-    for (const entry of entries) {
-      const decayRate = FATIGUE_DECAY_RATE[entry.category as EnergyCategory] || 2;
-      const hoursSinceUpdate = (now.getTime() - entry.updatedAt.getTime()) / (1000 * 60 * 60);
-      const decayAmount = hoursSinceUpdate * decayRate;
-
-      if (decayAmount > 0.5) {
-        // Only apply if meaningful decay
-        const newScore = Math.max(0, entry.fatigueScore - decayAmount);
-
-        await db.energyEntry.update({
-          where: { id: entry.id },
-          data: { fatigueScore: Math.round(newScore * 100) / 100 },
-        });
-
-        entriesDecayed++;
+    for (const cat of status.categories) {
+      if (cat.fatigueScore >= THRESHOLDS.critical) {
+        avoidTopics.push(cat.topic || cat.category);
+        recommendedActions.push(`Avoid ${cat.label} — critically fatigued`);
+      } else if (cat.fatigueScore >= THRESHOLDS.warning) {
+        recommendedActions.push(`Use ${cat.label} sparingly — approaching burnout`);
+      } else if (cat.fatigueScore < THRESHOLDS.healthy) {
+        recommendedActions.push(`${cat.label} is fresh — good time to publish`);
       }
     }
 
-    await logEnergyAction('natural_decay_applied', workspaceId, '', '', {
-      entriesDecayed,
-    });
+    const cooldownMinutes =
+      status.status === "critical" ? 240 :
+      status.status === "warning" ? 120 :
+      status.status === "moderate" ? 60 : 30;
 
-    return { entriesDecayed };
-  } catch (error) {
-    await logEnergyError('natural_decay_failed', workspaceId, '', '', error);
-    return { entriesDecayed: 0 };
-  }
-}
-
-// ─── Check Before Publish ────────────────────────────────────────────────────
-
-export async function checkBeforePublish(
-  workspaceId: string,
-  topic?: string,
-  tone?: string,
-  hook?: string
-): Promise<{
-  allowed: boolean;
-  warnings: string[];
-  fatigueLevels: Array<{ category: string; score: number; status: string }>;
-}> {
-  const warnings: string[] = [];
-  const fatigueLevels: Array<{ category: string; score: number; status: string }> = [];
-
-  // Check publish saturation
-  const saturation = await getFatigueLevel(workspaceId, 'publish_saturation');
-  fatigueLevels.push({
-    category: 'publish_saturation',
-    score: saturation.fatigueScore,
-    status: saturation.status,
-  });
-
-  if (saturation.shouldPause) {
-    warnings.push('Publish saturation is high. Consider spacing out your content.');
+    return { recommendedActions, avoidTopics, cooldownMinutes };
   }
 
-  // Check topic fatigue
-  if (topic) {
-    const topicFatigue = await getFatigueLevel(workspaceId, 'topic_fatigue', topic);
-    fatigueLevels.push({
-      category: 'topic_fatigue',
-      score: topicFatigue.fatigueScore,
-      status: topicFatigue.status,
-    });
+  // Apply time-based decay to all entries
+  private async applyDecay(entries: { id: string; fatigueScore: number; lastResetAt: Date }[]): Promise<void> {
+    const now = new Date();
 
-    if (topicFatigue.shouldPause) {
-      warnings.push(`Topic "${topic}" is fatigued. Try a different angle or topic.`);
+    for (const entry of entries) {
+      const hoursSinceReset = (now.getTime() - entry.lastResetAt.getTime()) / (1000 * 60 * 60);
+      const decay = hoursSinceReset * FATIGUE_DECAY_RATE;
+
+      if (decay > 0) {
+        const newScore = Math.max(0, entry.fatigueScore - decay);
+        await db.energyEntry.update({
+          where: { id: entry.id },
+          data: {
+            fatigueScore: newScore,
+            lastResetAt: now,
+          },
+        });
+      }
     }
   }
 
-  // Check tone fatigue
-  if (tone) {
-    const toneFatigue = await getFatigueLevel(workspaceId, 'tone_fatigue', tone);
-    fatigueLevels.push({
-      category: 'tone_fatigue',
-      score: toneFatigue.fatigueScore,
-      status: toneFatigue.status,
-    });
+  private getCategoryLabel(category: string): string {
+    const labels: Record<string, string> = {
+      topic_fatigue: "Topic Fatigue",
+      tone_fatigue: "Tone Fatigue",
+      publish_saturation: "Publish Saturation",
+      audience_exhaustion: "Audience Exhaustion",
+      hook_repetition: "Hook Repetition",
+      visual_fatigue: "Visual Fatigue",
+    };
+    return labels[category] || category;
+  }
 
-    if (toneFatigue.shouldPause) {
-      warnings.push(`Tone "${tone}" is overused. Try varying your voice.`);
+  private getFatigueColor(score: number): string {
+    if (score >= THRESHOLDS.critical) return "text-red-600";
+    if (score >= THRESHOLDS.warning) return "text-red-500";
+    if (score >= THRESHOLDS.moderate) return "text-yellow-500";
+    if (score >= THRESHOLDS.healthy) return "text-emerald-500";
+    return "text-green-500";
+  }
+
+  private generateRecommendations(categories: EnergyCategoryStatus[]): string[] {
+    const recommendations: string[] = [];
+
+    const criticalCount = categories.filter((c) => c.fatigueScore >= THRESHOLDS.critical).length;
+    if (criticalCount > 0) {
+      recommendations.push(`${criticalCount} area(s) are critically fatigued. Consider taking a break.`);
     }
-  }
 
-  // Check hook repetition
-  if (hook) {
-    const hookFatigue = await getFatigueLevel(workspaceId, 'hook_repetition', hook);
-    fatigueLevels.push({
-      category: 'hook_repetition',
-      score: hookFatigue.fatigueScore,
-      status: hookFatigue.status,
-    });
-
-    if (hookFatigue.shouldPause) {
-      warnings.push(`Hook "${hook.slice(0, 50)}..." has been used too often. Create a fresh hook.`);
+    const topicFatigue = categories.find((c) => c.category === "topic_fatigue");
+    if (topicFatigue && topicFatigue.fatigueScore > 50) {
+      recommendations.push("Try exploring new topics to reduce topic fatigue.");
     }
-  }
 
-  const exhaustedCount = fatigueLevels.filter((f) => f.status === 'exhausted').length;
-  const allowed = exhaustedCount < 2;
-
-  return { allowed, warnings, fatigueLevels };
-}
-
-// ─── Private: Get Energy Status ──────────────────────────────────────────────
-
-function getEnergyStatus(
-  category: string,
-  fatigueScore: number
-): { status: 'fresh' | 'moderate' | 'tired' | 'exhausted'; shouldPause: boolean } {
-  const thresholds = FATIGUE_THRESHOLDS[category as EnergyCategory] || FATIGUE_THRESHOLDS.publish_saturation;
-
-  if (fatigueScore >= thresholds.exhausted) {
-    return { status: 'exhausted', shouldPause: true };
-  }
-  if (fatigueScore >= thresholds.tired) {
-    return { status: 'tired', shouldPause: true };
-  }
-  if (fatigueScore >= thresholds.moderate) {
-    return { status: 'moderate', shouldPause: false };
-  }
-  return { status: 'fresh', shouldPause: false };
-}
-
-// ─── Private: Generate Recommendations ───────────────────────────────────────
-
-function generateRecommendations(
-  categories: EnergyReport['categories']
-): string[] {
-  const recommendations: string[] = [];
-
-  for (const cat of categories) {
-    switch (cat.status) {
-      case 'exhausted':
-        recommendations.push(
-          `🛑 ${cat.category}: Completely exhausted (score: ${cat.fatigueScore.toFixed(1)}). Stop publishing in this area immediately. Reset or wait for natural recovery.`
-        );
-        break;
-      case 'tired':
-        recommendations.push(
-          `⚠️ ${cat.category}: Approaching exhaustion (score: ${cat.fatigueScore.toFixed(1)}). Consider switching to a different ${cat.category.replace('_', ' ')}.`
-        );
-        break;
-      case 'moderate':
-        recommendations.push(
-          `📊 ${cat.category}: Moderate fatigue (score: ${cat.fatigueScore.toFixed(1)}). Plan to rotate topics/tones soon.`
-        );
-        break;
-      case 'fresh':
-        // No recommendation needed for fresh categories
-        break;
+    const hookRep = categories.find((c) => c.category === "hook_repetition");
+    if (hookRep && hookRep.fatigueScore > 60) {
+      recommendations.push("Your hooks are becoming repetitive. Experiment with new opening patterns.");
     }
-  }
 
-  // Add general recommendation if no specific ones
-  if (recommendations.length === 0) {
-    recommendations.push('✅ All energy levels are fresh. You have plenty of room to publish.');
-  }
+    const publishSat = categories.find((c) => c.category === "publish_saturation");
+    if (publishSat && publishSat.fatigueScore > 50) {
+      recommendations.push("Reduce publishing frequency to avoid audience fatigue.");
+    }
 
-  return recommendations;
-}
+    if (recommendations.length === 0) {
+      recommendations.push("Energy levels are healthy. Keep up the great work!");
+    }
 
-// ─── Logging ─────────────────────────────────────────────────────────────────
-
-async function logEnergyAction(
-  action: string,
-  workspaceId: string,
-  category: string,
-  topic: string,
-  metadata: Record<string, unknown>
-): Promise<void> {
-  try {
-    await db.systemLog.create({
-      data: {
-        service: 'energy',
-        level: 'info',
-        action,
-        message: `Energy: ${action} [${category}${topic ? `/${topic}` : ''}]`,
-        metadataJson: JSON.stringify({ workspaceId, category, topic, ...metadata }),
-      },
-    });
-  } catch {
-    // Logging failure should not break energy tracking
+    return recommendations;
   }
 }
 
-async function logEnergyError(
-  action: string,
-  workspaceId: string,
-  category: string,
-  topic: string,
-  error: unknown
-): Promise<void> {
-  try {
-    await db.systemLog.create({
-      data: {
-        service: 'energy',
-        level: 'error',
-        action,
-        message: `Energy error: ${action} [${category}${topic ? `/${topic}` : ''}]`,
-        metadataJson: JSON.stringify({
-          workspaceId,
-          category,
-          topic,
-          error: error instanceof Error ? error.message : String(error),
-        }),
-      },
-    });
-  } catch {
-    // Logging failure should not break energy tracking
+// Singleton factory
+const energySystems = new Map<string, EnergySystem>();
+
+export function getEnergySystem(workspaceId: string): EnergySystem {
+  if (!energySystems.has(workspaceId)) {
+    energySystems.set(workspaceId, new EnergySystem(workspaceId));
   }
+  return energySystems.get(workspaceId)!;
 }

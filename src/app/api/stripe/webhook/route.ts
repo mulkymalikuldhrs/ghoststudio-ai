@@ -1,132 +1,147 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { verifyWebhookSignature } from "@/lib/stripe";
+import Stripe from "stripe";
+
+const stripeKey = process.env.STRIPE_SECRET_KEY || "";
+
+// Lazy init to avoid build-time crash when STRIPE_SECRET_KEY is empty
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!_stripe) {
+    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not configured");
+    _stripe = new Stripe(stripeKey);
+  }
+  return _stripe;
+}
+
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
 
 // POST /api/stripe/webhook - Handle Stripe webhook events
 export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
-    const signature = request.headers.get("stripe-signature") ?? "";
+    const signature = request.headers.get("stripe-signature");
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let event: any;
-
-    if (process.env.STRIPE_WEBHOOK_SECRET) {
-      const verifiedEvent = verifyWebhookSignature(body, signature);
-      if (!verifiedEvent) {
-        return NextResponse.json(
-          { error: "Invalid signature" },
-          { status: 400 }
-        );
-      }
-      event = verifiedEvent;
-    } else {
-      try {
-        event = JSON.parse(body);
-      } catch {
-        return NextResponse.json(
-          { error: "Invalid payload" },
-          { status: 400 }
-        );
-      }
+    if (!signature) {
+      return NextResponse.json(
+        { error: "Missing stripe-signature header" },
+        { status: 400 }
+      );
     }
 
-    const { type } = event;
+    const stripe = getStripe();
+    let event: Stripe.Event;
 
-    switch (type) {
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    } catch (err) {
+      console.error("Webhook signature verification failed:", err);
+      return NextResponse.json(
+        { error: "Invalid signature" },
+        { status: 400 }
+      );
+    }
+
+    // Handle the event
+    switch (event.type) {
       case "checkout.session.completed": {
-        const metadata = event.data?.object?.metadata;
-        const userId = metadata?.userId;
-        const planId = metadata?.planId;
+        const session = event.data.object as Stripe.Checkout.Session;
+        const userId = session.metadata?.userId;
+        const plan = session.metadata?.plan;
 
-        if (userId && planId) {
+        if (userId && plan) {
+          // Update user plan
           await db.user.update({
             where: { id: userId },
-            data: {
-              plan: planId,
-              stripeCustomerId: event.data.object.customer ?? null,
-            },
+            data: { plan },
           });
 
-          const endDate = new Date();
-          endDate.setMonth(endDate.getMonth() + 1);
+          // Create or update subscription
+          if (session.subscription) {
+            const subscription = await stripe.subscriptions.retrieve(
+              session.subscription as string
+            );
 
-          // Find existing subscription or create one
-          const existingSub = await db.subscription.findFirst({
-            where: { userId, status: "active" },
-          });
+            const existingSub = await db.subscription.findFirst({
+              where: { stripeSubscriptionId: subscription.id },
+            });
 
-          if (existingSub) {
-            await db.subscription.update({
-              where: { id: existingSub.id },
-              data: {
-                plan: planId,
-                status: "active",
-                stripeSubscriptionId: event.data.object.subscription ?? null,
-                currentPeriodStart: new Date(),
-                currentPeriodEnd: endDate,
-              },
-            });
-          } else {
-            await db.subscription.create({
-              data: {
-                userId,
-                plan: planId,
-                status: "active",
-                stripeSubscriptionId: event.data.object.subscription ?? null,
-                currentPeriodStart: new Date(),
-                currentPeriodEnd: endDate,
-              },
-            });
+            if (existingSub) {
+              await db.subscription.update({
+                where: { id: existingSub.id },
+                data: {
+                  plan,
+                  status: subscription.status === "active" ? "active" : "cancelled",
+                  stripePriceId: subscription.items.data[0]?.price.id,
+                },
+              });
+            } else {
+              await db.subscription.create({
+                data: {
+                  userId,
+                  plan,
+                  status: subscription.status === "active" ? "active" : "cancelled",
+                  stripeSubscriptionId: subscription.id,
+                  stripePriceId: subscription.items.data[0]?.price.id,
+                },
+              });
+            }
           }
         }
         break;
       }
 
       case "customer.subscription.updated": {
-        const subId = event.data?.object?.id as string | undefined;
-        if (subId) {
-          const sub = await db.subscription.findFirst({
-            where: { stripeSubscriptionId: subId },
-          });
-          if (sub) {
-            await db.subscription.update({
-              where: { id: sub.id },
-              data: {
-                status: event.data?.object?.status ?? "active",
-                currentPeriodEnd: event.data?.object?.current_period_end
-                  ? new Date(event.data.object.current_period_end * 1000)
-                  : undefined,
-              },
-            });
-          }
-        }
+        const subscription = event.data.object as Stripe.Subscription;
+        await db.subscription.updateMany({
+          where: { stripeSubscriptionId: subscription.id },
+          data: {
+            status: subscription.status === "active" ? "active" : "cancelled",
+            cancelAtPeriodEnd: subscription.cancel_at_period_end,
+          },
+        });
         break;
       }
 
       case "customer.subscription.deleted": {
-        const deletedSubId = event.data?.object?.id as string | undefined;
-        if (deletedSubId) {
-          const sub = await db.subscription.findFirst({
-            where: { stripeSubscriptionId: deletedSubId },
+        const subscription = event.data.object as Stripe.Subscription;
+        const sub = await db.subscription.findFirst({
+          where: { stripeSubscriptionId: subscription.id },
+        });
+        if (sub) {
+          await db.subscription.update({
+            where: { id: sub.id },
+            data: { status: "cancelled" },
           });
-          if (sub) {
-            await db.subscription.update({
-              where: { id: sub.id },
-              data: { status: "cancelled", cancelAtPeriodEnd: true },
-            });
-          }
+          // Downgrade user plan
+          await db.user.update({
+            where: { id: sub.userId },
+            data: { plan: "free" },
+          });
+        }
+        break;
+      }
+
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const subscriptionId = (invoice as any).subscription as string | null | undefined;
+        if (subscriptionId) {
+          await db.subscription.updateMany({
+            where: { stripeSubscriptionId: subscriptionId },
+            data: { status: "past_due" },
+          });
         }
         break;
       }
 
       default:
-        console.log(`Unhandled webhook event: ${type}`);
+        console.log(`Unhandled event type: ${event.type}`);
     }
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error("Webhook error:", error);
+    console.error("Stripe webhook error:", error);
     return NextResponse.json(
       { error: "Webhook handler failed" },
       { status: 500 }

@@ -1,41 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { requireAuth } from "@/lib/auth-guard";
+import { CreateVideoSchema, formatZodErrors } from "@/lib/validators";
 
-// GET /api/projects - List all projects for the authenticated user
+// GET /api/projects - List projects (legacy compatibility)
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await db.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
+    const auth = await requireAuth(request);
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
+    const limit = parseInt(searchParams.get("limit") || "20");
 
-    const where: Record<string, unknown> = { userId: user.id };
-    if (status) {
-      where.status = status;
-    }
+    const where: Record<string, unknown> = { userId: auth.userId };
+    if (status) where.status = status;
 
-    const projects = await db.project.findMany({
+    const projects = await db.videoProject.findMany({
       where,
-      include: { videos: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: { updatedAt: "desc" },
+      take: limit,
     });
 
     return NextResponse.json({ projects });
   } catch (error) {
-    console.error("Failed to fetch projects:", error);
+    if (error instanceof NextResponse) return error;
+    console.error("Projects list error:", error);
     return NextResponse.json(
       { error: "Failed to fetch projects" },
       { status: 500 }
@@ -43,53 +32,48 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/projects - Create a new project
+// POST /api/projects - Create project (legacy compatibility)
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await db.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
+    const auth = await requireAuth(request);
 
     const body = await request.json();
-    const { title, prompt, niche } = body;
 
-    if (!title) {
+    // Validate with a subset of the video schema for legacy compatibility
+    const validation = CreateVideoSchema.safeParse({
+      ...body,
+      userId: auth.userId,
+    });
+    if (!validation.success) {
       return NextResponse.json(
-        { error: "Title is required" },
+        { error: "Validation failed", details: formatZodErrors(validation.error) },
         { status: 400 }
       );
     }
 
-    const project = await db.project.create({
+    const data = validation.data;
+
+    const project = await db.videoProject.create({
       data: {
-        title,
-        prompt: prompt ?? null,
-        niche: niche ?? "general",
-        userId: user.id,
+        userId: auth.userId,
+        workspaceId: data.workspaceId,
+        title: data.title,
+        prompt: data.prompt,
+        niche: data.niche,
+        style: data.style,
+        aspectRatio: data.aspectRatio,
+        voiceId: data.voiceId,
+        subtitleStyle: data.subtitleStyle,
+        resolution: data.resolution,
+        configJson: JSON.stringify(data.configJson),
         status: "draft",
       },
     });
 
-    // Create initial video entry
-    await db.video.create({
-      data: {
-        projectId: project.id,
-        status: "pending",
-      },
-    });
-
-    return NextResponse.json({ project }, { status: 201 });
+    return NextResponse.json(project, { status: 201 });
   } catch (error) {
-    console.error("Failed to create project:", error);
+    if (error instanceof NextResponse) return error;
+    console.error("Project create error:", error);
     return NextResponse.json(
       { error: "Failed to create project" },
       { status: 500 }

@@ -1,211 +1,140 @@
-/**
- * Content CRUD API
- * GET  /api/content          — List content items (with filtering by status, topic, workspaceId)
- * POST /api/content          — Create new content item (idea → draft pipeline)
- */
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { requireAuth, requireWorkspaceAccess } from "@/lib/auth-guard";
+import { CreateContentSchema, formatZodErrors } from "@/lib/validators";
+import { routeToAgent } from "@/lib/ai-orchestrator";
 
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { generateDraft } from '@/lib/ai-orchestrator';
-
-// ─── GET: List Content Items ─────────────────────────────────────────────────
-
+// GET /api/content - List content items (workspace-scoped)
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request);
+
     const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get('workspaceId');
-    const status = searchParams.get('status');
-    const topic = searchParams.get('topic');
-    const limit = parseInt(searchParams.get('limit') || '20', 10);
-    const offset = parseInt(searchParams.get('offset') || '0', 10);
+    const workspaceId = searchParams.get("workspaceId");
+    const status = searchParams.get("status");
+    const limit = parseInt(searchParams.get("limit") || "20");
+    const offset = parseInt(searchParams.get("offset") || "0");
 
     if (!workspaceId) {
       return NextResponse.json(
-        { error: 'workspaceId is required' },
+        { error: "workspaceId is required" },
         { status: 400 }
       );
     }
 
-    const where: Record<string, unknown> = {
-      workspaceId,
-    };
+    // Verify workspace access
+    const { workspace } = await requireWorkspaceAccess(request, workspaceId);
 
+    const where: Record<string, unknown> = { workspaceId: workspace.id };
     if (status) {
       where.status = status;
-    } else {
-      where.status = { not: 'archived' };
-    }
-
-    if (topic) {
-      where.topic = { contains: topic };
     }
 
     const [items, total] = await Promise.all([
       db.contentItem.findMany({
         where,
-        include: {
-          contentTags: true,
-          seoData: true,
-          _count: { select: { variants: true, analyticsEvents: true } },
-        },
-        orderBy: { updatedAt: 'desc' },
+        orderBy: { updatedAt: "desc" },
         take: limit,
         skip: offset,
+        include: {
+          variants: true,
+          seoData: true,
+          contentTags: true,
+        },
       }),
       db.contentItem.count({ where }),
     ]);
 
-    console.log(`[Content API] Listed ${items.length}/${total} items for workspace ${workspaceId}`);
-
-    return NextResponse.json({
-      items,
-      total,
-      limit,
-      offset,
-    });
+    return NextResponse.json({ items, total, limit, offset });
   } catch (error) {
-    console.error('[Content API] GET error:', error);
+    // Auth guard throws NextResponse directly
+    if (error instanceof NextResponse) return error;
+    console.error("Content list error:", error);
     return NextResponse.json(
-      { error: 'Failed to list content items', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: "Failed to fetch content items" },
       { status: 500 }
     );
   }
 }
 
-// ─── POST: Create Content Item ───────────────────────────────────────────────
-
+// POST /api/content - Create content item with optional AI draft generation
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const {
-      workspaceId,
-      idea,
-      sources,
-      angle,
-      tone,
-      topic,
-      sourceType = 'idea',
-      autoDraft = true,
-    } = body;
+    const auth = await requireAuth(request);
 
-    if (!workspaceId || !idea) {
+    const body = await request.json();
+    const validation = CreateContentSchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'workspaceId and idea are required' },
+        { error: "Validation failed", details: formatZodErrors(validation.error) },
         { status: 400 }
       );
     }
 
-    // Verify workspace exists
-    const workspace = await db.workspace.findUnique({
-      where: { id: workspaceId },
-    });
+    const data = validation.data;
 
-    if (!workspace) {
-      return NextResponse.json(
-        { error: 'Workspace not found' },
-        { status: 404 }
-      );
-    }
+    // Verify workspace access
+    const { workspace } = await requireWorkspaceAccess(request, data.workspaceId);
 
-    // Create content item with initial idea
-    const slug = idea
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .slice(0, 60)
-      .replace(/^-|-$/g, '');
-
-    const contentItem = await db.contentItem.create({
+    // Create the content item
+    const item = await db.contentItem.create({
       data: {
-        workspaceId,
-        title: idea.slice(0, 200),
-        slug,
-        angle: angle || null,
-        topic: topic || null,
-        status: 'idea',
-        sourceNotes: sources ? JSON.stringify(sources) : null,
-        sourceType,
-        masterMarkdown: null,
-        summary: null,
+        workspaceId: workspace.id,
+        title: data.title,
+        subtitle: data.subtitle,
+        slug: data.slug,
+        angle: data.angle,
+        topic: data.topic,
+        sourceNotes: data.sourceNotes,
+        sourceType: data.sourceType,
+        masterMarkdown: data.masterMarkdown,
+        status: "idea",
       },
     });
 
-    console.log(`[Content API] Created content item ${contentItem.id} — "${idea.slice(0, 60)}"`);
-
-    // Optionally auto-generate draft
-    let draftResult = null;
-    if (autoDraft) {
+    // If no masterMarkdown provided, auto-generate a draft using the AI orchestrator
+    if (!data.masterMarkdown && data.sourceNotes) {
       try {
-        console.log(`[Content API] Auto-generating draft for ${contentItem.id}...`);
-        draftResult = await generateDraft({
-          idea,
-          sources: sources || [],
-          angle,
-          workspaceId,
-          tone,
-        });
+        const agentResult = await routeToAgent("draft_job", {
+          idea: data.title,
+          sources: data.sourceNotes ? [data.sourceNotes] : [],
+          angle: data.angle,
+          workspaceId: workspace.id,
+          tone: undefined,
+          targetLength: undefined,
+        }, workspace.id);
 
-        // Update content item with draft
-        await db.contentItem.update({
-          where: { id: contentItem.id },
-          data: {
-            title: draftResult.title || contentItem.title,
-            subtitle: draftResult.subtitle || null,
-            slug: draftResult.slug || contentItem.slug,
-            masterMarkdown: draftResult.markdown,
-            summary: draftResult.summary || null,
-            angle: draftResult.suggestedAngle || angle || null,
-            status: 'draft',
-          },
-        });
-
-        // Create tags from generated tags
-        if (draftResult.tags && draftResult.tags.length > 0) {
-          await db.contentTag.createMany({
-            data: draftResult.tags.map((tag) => ({
-              contentId: contentItem.id,
-              tag,
-              category: 'topic',
-            })),
-            skipDuplicates: true,
-          });
+        if (agentResult.status === "agent_completed" && agentResult.result) {
+          const result = agentResult.result as Record<string, unknown>;
+          const markdown = result.markdown as string | undefined;
+          const summary = result.summary as string | undefined;
+          if (markdown) {
+            await db.contentItem.update({
+              where: { id: item.id },
+              data: {
+                masterMarkdown: markdown,
+                summary: summary || undefined,
+                status: "draft",
+              },
+            });
+            // Update the returned item
+            item.masterMarkdown = markdown;
+            item.summary = summary || null;
+            item.status = "draft";
+          }
         }
-
-        console.log(`[Content API] Draft generated for ${contentItem.id}`);
       } catch (draftError) {
-        console.error(`[Content API] Draft generation failed for ${contentItem.id}:`, draftError);
-        // Content item remains in "idea" status — draft can be retried
+        // Draft generation failure should not prevent creation
+        console.error("Auto-draft generation failed:", draftError);
       }
     }
 
-    // Fetch the final state with relations
-    const finalItem = await db.contentItem.findUnique({
-      where: { id: contentItem.id },
-      include: {
-        contentTags: true,
-        seoData: true,
-        variants: true,
-      },
-    });
-
-    return NextResponse.json(
-      {
-        item: finalItem,
-        draftGenerated: !!draftResult,
-        draft: draftResult
-          ? {
-              title: draftResult.title,
-              subtitle: draftResult.subtitle,
-              tags: draftResult.tags,
-              suggestedAngle: draftResult.suggestedAngle,
-            }
-          : null,
-      },
-      { status: 201 }
-    );
+    return NextResponse.json(item, { status: 201 });
   } catch (error) {
-    console.error('[Content API] POST error:', error);
+    if (error instanceof NextResponse) return error;
+    console.error("Content create error:", error);
     return NextResponse.json(
-      { error: 'Failed to create content item', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: "Failed to create content item" },
       { status: 500 }
     );
   }

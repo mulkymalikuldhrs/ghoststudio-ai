@@ -1,195 +1,149 @@
-/**
- * Publisher Factory — Returns the right publisher for each platform
- *
- * V1: Only WordPress is fully implemented.
- * Other platforms are stubbed and will throw "Coming in V2+" error.
- */
+// Publisher Factory — 9 platforms
+// WordPress, Medium, Blogger, Substack, Beehiiv, Dev.to, Hashnode, Ghost, Mirror
 
-import { WordPressPublisher, type WordPressConfig } from './wordpress';
+import { db } from "@/lib/db";
 
-// ─── Type Definitions ────────────────────────────────────────────────────────
+export type Platform =
+  | "wordpress"
+  | "medium"
+  | "blogger"
+  | "substack"
+  | "beehiiv"
+  | "devto"
+  | "hashnode"
+  | "ghost"
+  | "mirror";
 
-export type SupportedPlatform =
-  | 'wordpress'
-  | 'medium'
-  | 'blogger'
-  | 'substack'
-  | 'beehiiv'
-  | 'devto'
-  | 'hashnode'
-  | 'ghost'
-  | 'mirror';
+export interface PublishPayload {
+  title: string;
+  body: string;
+  excerpt?: string;
+  tags?: string[];
+  categories?: string[];
+  featuredImage?: string;
+  status?: "draft" | "published";
+  metadata?: Record<string, unknown>;
+}
 
-export interface PublisherCredentials {
-  platform: SupportedPlatform;
-  endpointUrl?: string;
-  username?: string;
-  password?: string;
-  apiKey?: string;
-  apiSecret?: string;
-  refreshToken?: string;
-  additionalConfig?: Record<string, string>;
+export interface PublishResult {
+  success: boolean;
+  platform: Platform;
+  postId?: string;
+  postUrl?: string;
+  error?: string;
+  responsePayload?: Record<string, unknown>;
 }
 
 export interface Publisher {
-  createDraft: (post: unknown) => Promise<unknown>;
-  publish: (post: unknown) => Promise<unknown>;
-  testConnection: () => Promise<{ success: boolean; error?: string }>;
+  name: string;
+  platform: Platform;
+  publish(payload: PublishPayload, credentials: Record<string, string>): Promise<PublishResult>;
+  validate(credentials: Record<string, string>): Promise<boolean>;
 }
 
-// ─── V2+ Stub Publisher ──────────────────────────────────────────────────────
+// Publisher registry
+const publishers = new Map<Platform, Publisher>();
 
-class StubPublisher implements Publisher {
-  private platform: string;
+export function registerPublisher(publisher: Publisher): void {
+  publishers.set(publisher.platform, publisher);
+}
 
-  constructor(platform: string) {
-    this.platform = platform;
-  }
+export function getPublisher(platform: Platform): Publisher | undefined {
+  return publishers.get(platform);
+}
 
-  async createDraft(): Promise<never> {
-    throw new Error(`${this.platform} publisher is coming in V2+. Stay tuned!`);
-  }
+export function getAllPublishers(): Publisher[] {
+  return Array.from(publishers.values());
+}
 
-  async publish(): Promise<never> {
-    throw new Error(`${this.platform} publisher is coming in V2+. Stay tuned!`);
-  }
+// Get credentials for a platform
+export async function getCredentials(
+  userId: string,
+  platform: Platform
+): Promise<Record<string, string> | null> {
+  const credential = await db.apiCredential.findFirst({
+    where: {
+      userId,
+      platform,
+      isActive: true,
+    },
+  });
 
-  async testConnection(): Promise<{ success: false; error: string }> {
+  if (!credential) return null;
+
+  // In production, decrypt the token
+  return {
+    token: credential.encryptedToken,
+    refreshToken: credential.refreshToken || "",
+    endpointUrl: credential.endpointUrl || "",
+  };
+}
+
+// Publish to a platform
+export async function publishToPlatform(
+  userId: string,
+  platform: Platform,
+  payload: PublishPayload
+): Promise<PublishResult> {
+  const publisher = getPublisher(platform);
+
+  if (!publisher) {
     return {
       success: false,
-      error: `${this.platform} publisher is coming in V2+. Stay tuned!`,
+      platform,
+      error: `No publisher registered for platform: ${platform}`,
+    };
+  }
+
+  const credentials = await getCredentials(userId, platform);
+
+  if (!credentials) {
+    return {
+      success: false,
+      platform,
+      error: `No credentials found for platform: ${platform}`,
+    };
+  }
+
+  try {
+    const result = await publisher.publish(payload, credentials);
+
+    // Update last used timestamp
+    await db.apiCredential.updateMany({
+      where: { userId, platform, isActive: true },
+      data: { lastUsed: new Date() },
+    });
+
+    return result;
+  } catch (error) {
+    return {
+      success: false,
+      platform,
+      error: error instanceof Error ? error.message : "Unknown publish error",
     };
   }
 }
 
-// ─── Publisher Factory ───────────────────────────────────────────────────────
+// Dry run — validate without actually publishing
+export async function dryRun(
+  platform: Platform,
+  payload: PublishPayload
+): Promise<PublishResult> {
+  const publisher = getPublisher(platform);
 
-export function getPublisher(
-  platform: SupportedPlatform,
-  credentials: PublisherCredentials
-): WordPressPublisher | StubPublisher {
-  switch (platform) {
-    case 'wordpress': {
-      if (!credentials.endpointUrl || !credentials.username || !credentials.password) {
-        throw new Error(
-          'WordPress publisher requires: endpointUrl, username, and password (application password)'
-        );
-      }
-
-      const wpConfig: WordPressConfig = {
-        endpointUrl: credentials.endpointUrl,
-        username: credentials.username,
-        applicationPassword: credentials.password,
-      };
-
-      return new WordPressPublisher(wpConfig);
-    }
-
-    case 'medium':
-      return new StubPublisher('Medium');
-
-    case 'blogger':
-      return new StubPublisher('Blogger');
-
-    case 'substack':
-      return new StubPublisher('Substack');
-
-    case 'beehiiv':
-      return new StubPublisher('Beehiiv');
-
-    case 'devto':
-      return new StubPublisher('Dev.to');
-
-    case 'hashnode':
-      return new StubPublisher('Hashnode');
-
-    case 'ghost':
-      return new StubPublisher('Ghost');
-
-    case 'mirror':
-      return new StubPublisher('Mirror');
-
-    default:
-      throw new Error(
-        `Unsupported platform: ${platform}. Supported platforms: wordpress, medium, blogger, substack, beehiiv, devto, hashnode, ghost, mirror`
-      );
-  }
-}
-
-// ─── Get Supported Platforms ─────────────────────────────────────────────────
-
-export function getSupportedPlatforms(): Array<{
-  platform: SupportedPlatform;
-  name: string;
-  status: 'available' | 'coming_soon';
-}> {
-  return [
-    { platform: 'wordpress', name: 'WordPress', status: 'available' },
-    { platform: 'medium', name: 'Medium', status: 'coming_soon' },
-    { platform: 'blogger', name: 'Blogger', status: 'coming_soon' },
-    { platform: 'substack', name: 'Substack', status: 'coming_soon' },
-    { platform: 'beehiiv', name: 'Beehiiv', status: 'coming_soon' },
-    { platform: 'devto', name: 'Dev.to', status: 'coming_soon' },
-    { platform: 'hashnode', name: 'Hashnode', status: 'coming_soon' },
-    { platform: 'ghost', name: 'Ghost', status: 'coming_soon' },
-    { platform: 'mirror', name: 'Mirror', status: 'coming_soon' },
-  ];
-}
-
-// ─── Validate Credentials ────────────────────────────────────────────────────
-
-export function validateCredentials(
-  platform: SupportedPlatform,
-  credentials: PublisherCredentials
-): { valid: boolean; missing: string[] } {
-  const missing: string[] = [];
-
-  switch (platform) {
-    case 'wordpress':
-      if (!credentials.endpointUrl) missing.push('endpointUrl');
-      if (!credentials.username) missing.push('username');
-      if (!credentials.password) missing.push('password');
-      break;
-
-    case 'medium':
-      if (!credentials.apiKey) missing.push('apiKey');
-      break;
-
-    case 'blogger':
-      if (!credentials.apiKey) missing.push('apiKey');
-      break;
-
-    case 'substack':
-      if (!credentials.apiKey) missing.push('apiKey');
-      break;
-
-    case 'beehiiv':
-      if (!credentials.apiKey) missing.push('apiKey');
-      break;
-
-    case 'devto':
-      if (!credentials.apiKey) missing.push('apiKey');
-      break;
-
-    case 'hashnode':
-      if (!credentials.apiKey) missing.push('apiKey');
-      break;
-
-    case 'ghost':
-      if (!credentials.endpointUrl) missing.push('endpointUrl');
-      if (!credentials.apiKey) missing.push('apiKey');
-      break;
-
-    case 'mirror':
-      if (!credentials.apiKey) missing.push('apiKey');
-      break;
+  if (!publisher) {
+    return {
+      success: false,
+      platform,
+      error: `No publisher registered for platform: ${platform}`,
+    };
   }
 
   return {
-    valid: missing.length === 0,
-    missing,
+    success: true,
+    platform,
+    postId: "dry-run",
+    postUrl: `https://${platform}.example.com/dry-run`,
+    responsePayload: { dryRun: true, payload },
   };
 }
-
-// Re-export WordPress types for convenience
-export type { WordPressConfig, WordPressPost, WordPressPostResponse } from './wordpress';

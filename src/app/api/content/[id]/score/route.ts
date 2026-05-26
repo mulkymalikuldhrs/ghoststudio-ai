@@ -1,128 +1,139 @@
-/**
- * Content Scoring API
- * POST /api/content/[id]/score — Score content using content-scoring module
- * Returns writing, humanic, SEO, trust, composite scores with action recommendation
- */
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { requireAuth, requireWorkspaceAccess } from "@/lib/auth-guard";
+import { ScoreContentSchema, formatZodErrors } from "@/lib/validators";
+import { routeToAgent } from "@/lib/ai-orchestrator";
 
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { scoreContentFull, saveContentScores, type SeoDataInput, type SourceData } from '@/lib/content-scoring';
-
+// POST /api/content/[id]/score - Score content using 4-dimension scoring
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAuth(request);
     const { id } = await params;
 
-    // Fetch content item with SEO data
-    const contentItem = await db.contentItem.findUnique({
-      where: { id },
-      include: {
-        seoData: true,
-        contentTags: true,
-      },
-    });
-
-    if (!contentItem || contentItem.status === 'archived') {
+    const body = await request.json();
+    const validation = ScoreContentSchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Content item not found' },
-        { status: 404 }
-      );
-    }
-
-    if (!contentItem.masterMarkdown) {
-      return NextResponse.json(
-        { error: 'Content must have a draft before scoring. Generate a draft first.' },
+        { error: "Validation failed", details: formatZodErrors(validation.error) },
         { status: 400 }
       );
     }
 
-    console.log(`[Score API] Scoring content ${id}`);
+    const { dimensions, useAgent } = validation.data;
 
-    // Prepare SEO data input
-    const seoInput: SeoDataInput = {
-      metaTitle: contentItem.seoData?.metaTitle || undefined,
-      metaDescription: contentItem.seoData?.metaDescription || undefined,
-      focusKeyword: contentItem.seoData?.focusKeyword || undefined,
-      secondaryKeywords: contentItem.seoData?.secondaryKeywords
-        ? contentItem.seoData.secondaryKeywords.split(',')
-        : undefined,
-      slug: contentItem.seoData?.slug || undefined,
-      headingStructure: contentItem.seoData?.headingStructure || undefined,
-      content: contentItem.masterMarkdown,
-      readabilityScore: contentItem.seoData?.readabilityScore || undefined,
-    };
+    const contentItem = await db.contentItem.findUnique({
+      where: { id },
+    });
 
-    // Prepare source data input
-    const sourceInput: SourceData = {
-      content: contentItem.masterMarkdown,
-      topic: contentItem.topic || undefined,
-      sources: contentItem.sourceNotes ? [contentItem.sourceNotes] : undefined,
-    };
+    if (!contentItem) {
+      return NextResponse.json(
+        { error: "Content item not found" },
+        { status: 404 }
+      );
+    }
 
-    // Run full scoring pipeline
-    const scores = await scoreContentFull(
-      contentItem.masterMarkdown,
-      seoInput,
-      sourceInput
+    // Verify workspace access
+    await requireWorkspaceAccess(request, contentItem.workspaceId);
+
+    let qualityScore: number;
+    let humanicScore: number;
+    let seoScore: number;
+    let trustScore: number;
+
+    if (useAgent) {
+      // Route to the scoring agent via the AI orchestrator
+      const agentResult = await routeToAgent("scoring_job", {
+        contentId: id,
+        content: contentItem.masterMarkdown || "",
+        title: contentItem.title,
+        sourceType: contentItem.sourceType,
+        sourceNotes: contentItem.sourceNotes,
+        angle: contentItem.angle,
+        seoData: null,
+        workspaceId: contentItem.workspaceId,
+      }, contentItem.workspaceId);
+
+      if (agentResult.status === "agent_completed" && agentResult.result) {
+        const result = agentResult.result as Record<string, unknown>;
+        const scores = result.scores as Record<string, number> | undefined;
+        qualityScore = scores?.quality ?? dimensions?.quality ?? contentItem.qualityScore;
+        humanicScore = scores?.humanic ?? dimensions?.humanic ?? contentItem.humanicScore;
+        seoScore = scores?.seo ?? dimensions?.seo ?? contentItem.seoScore;
+        trustScore = scores?.trust ?? dimensions?.trust ?? contentItem.trustScore;
+      } else {
+        // Fallback to provided dimensions or existing scores
+        qualityScore = dimensions?.quality ?? contentItem.qualityScore;
+        humanicScore = dimensions?.humanic ?? contentItem.humanicScore;
+        seoScore = dimensions?.seo ?? contentItem.seoScore;
+        trustScore = dimensions?.trust ?? contentItem.trustScore;
+      }
+    } else {
+      // Use provided dimensions or existing scores
+      qualityScore = dimensions?.quality ?? contentItem.qualityScore;
+      humanicScore = dimensions?.humanic ?? contentItem.humanicScore;
+      seoScore = dimensions?.seo ?? contentItem.seoScore;
+      trustScore = dimensions?.trust ?? contentItem.trustScore;
+    }
+
+    // Weighted composite matching ContentScorer weights: quality=0.30, humanic=0.30, seo=0.25, trust=0.15
+    const compositeScore = Math.round(
+      qualityScore * 0.30 + humanicScore * 0.30 + seoScore * 0.25 + trustScore * 0.15
     );
 
-    // Save scores to content item
-    await saveContentScores(id, scores.composite);
+    // Determine action based on score
+    let action: string;
+    let newStatus: string;
+    let humanReviewRequired: boolean;
 
-    // Update content status based on action recommendation
-    const statusUpdate: Record<string, unknown> = {};
-    if (scores.composite.action === 'auto_schedule') {
-      statusUpdate.status = 'ready';
-      statusUpdate.humanReviewRequired = false;
-    } else if (scores.composite.action === 'human_review') {
-      statusUpdate.humanReviewRequired = true;
-    } else if (scores.composite.action === 'reject_rewrite') {
-      statusUpdate.humanReviewRequired = true;
-      statusUpdate.status = 'editing';
+    if (compositeScore >= 80) {
+      action = "auto_schedule";
+      newStatus = "ready";
+      humanReviewRequired = false;
+    } else if (compositeScore >= 60) {
+      action = "human_review";
+      newStatus = "editing";
+      humanReviewRequired = true;
+    } else {
+      action = "reject_rewrite";
+      newStatus = "editing";
+      humanReviewRequired = true;
     }
 
-    if (Object.keys(statusUpdate).length > 0) {
-      await db.contentItem.update({
-        where: { id },
-        data: statusUpdate,
-      });
-    }
-
-    console.log(`[Score API] Content ${id} scored: composite=${scores.composite.score}, action=${scores.composite.action}`);
+    await db.contentItem.update({
+      where: { id },
+      data: {
+        qualityScore,
+        humanicScore,
+        seoScore,
+        trustScore,
+        humanReviewRequired,
+        status: newStatus,
+      },
+    });
 
     return NextResponse.json({
       contentId: id,
       scores: {
-        writing: scores.writing,
-        humanic: scores.humanic,
-        seo: scores.seo,
-        trust: scores.trust,
-        composite: scores.composite,
+        quality: qualityScore,
+        humanic: humanicScore,
+        seo: seoScore,
+        trust: trustScore,
+        composite: compositeScore,
       },
-      recommendation: scores.composite.action,
-      message: getActionMessage(scores.composite.action, scores.composite.score),
+      humanReviewRequired,
+      action,
+      previousStatus: contentItem.status,
+      newStatus,
     });
   } catch (error) {
-    console.error('[Score API] POST error:', error);
+    if (error instanceof NextResponse) return error;
+    console.error("Content score error:", error);
     return NextResponse.json(
-      { error: 'Content scoring failed', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: "Failed to score content" },
       { status: 500 }
     );
-  }
-}
-
-function getActionMessage(
-  action: 'auto_schedule' | 'human_review' | 'reject_rewrite',
-  score: number
-): string {
-  switch (action) {
-    case 'auto_schedule':
-      return `Content scored ${score}/100 — quality is high enough for auto-scheduling.`;
-    case 'human_review':
-      return `Content scored ${score}/100 — human review is recommended before publishing.`;
-    case 'reject_rewrite':
-      return `Content scored ${score}/100 — score is too low. Rewrite is recommended.`;
   }
 }

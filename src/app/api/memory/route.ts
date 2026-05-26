@@ -1,162 +1,170 @@
-/**
- * Memory System API
- * GET  /api/memory — Search/retrieve memories (query params: workspaceId, category, limit, search)
- * POST /api/memory — Store new memory
- * PUT  /api/memory — Update memory score
- */
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { requireAuth, requireWorkspaceAccess } from "@/lib/auth-guard";
+import { StoreMemorySchema, UpdateMemorySchema, formatZodErrors } from "@/lib/validators";
+import { routeToAgent } from "@/lib/ai-orchestrator";
+import { getMemorySystem } from "@/lib/memory-system";
 
-import { NextRequest, NextResponse } from 'next/server';
-import {
-  storeMemory,
-  retrieveMemory,
-  searchMemory,
-  updateMemoryScore,
-  getMemoryStats,
-  detectPatterns,
-  type MemoryInput,
-} from '@/lib/memory-system';
-
-// ─── GET: Search/Retrieve Memories ───────────────────────────────────────────
-
+// GET /api/memory - List memory entries
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request);
+
     const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get('workspaceId');
-    const category = searchParams.get('category') || undefined;
-    const search = searchParams.get('search') || undefined;
-    const limit = parseInt(searchParams.get('limit') || '20', 10);
+    const workspaceId = searchParams.get("workspaceId");
+    const category = searchParams.get("category");
+    const minScore = searchParams.get("minScore");
 
     if (!workspaceId) {
       return NextResponse.json(
-        { error: 'workspaceId is required' },
+        { error: "workspaceId is required" },
         { status: 400 }
       );
     }
 
-    let memories;
-    let stats;
+    // Verify workspace access
+    await requireWorkspaceAccess(request, workspaceId);
 
-    if (search) {
-      // Search mode
-      memories = await searchMemory(workspaceId, search, category);
-    } else if (category) {
-      // Category retrieval mode
-      memories = await retrieveMemory(workspaceId, category, limit);
-    } else {
-      // Get all memories across categories (limited)
-      const categories = ['hook', 'topic', 'tone', 'timing', 'cta', 'format', 'platform', 'monetization', 'audience', 'style'];
-      const allMemories = [];
-      for (const cat of categories) {
-        const catMemories = await retrieveMemory(workspaceId, cat, Math.ceil(limit / categories.length));
-        allMemories.push(...catMemories);
-      }
-      memories = allMemories
-        .sort((a, b) => b.score - a.score)
-        .slice(0, limit);
-    }
+    const where: Record<string, unknown> = { workspaceId, isActive: true };
+    if (category) where.category = category;
+    if (minScore) where.score = { gte: parseFloat(minScore) };
 
-    // Always include stats
-    stats = await getMemoryStats(workspaceId);
+    const [entries, insights] = await Promise.all([
+      db.memoryEntry.findMany({
+        where,
+        orderBy: { score: "desc" },
+        take: 100,
+      }),
+      getMemorySystem(workspaceId).getInsights(),
+    ]);
 
-    // Include patterns if requested
-    const includePatterns = searchParams.get('includePatterns') === 'true';
-    const patterns = includePatterns ? await detectPatterns(workspaceId) : undefined;
-
-    console.log(`[Memory API] Retrieved ${memories.length} memories for workspace ${workspaceId}`);
-
-    return NextResponse.json({
-      memories,
-      stats,
-      ...(patterns && { patterns }),
-    });
+    return NextResponse.json({ entries, insights });
   } catch (error) {
-    console.error('[Memory API] GET error:', error);
+    if (error instanceof NextResponse) return error;
+    console.error("Memory list error:", error);
     return NextResponse.json(
-      { error: 'Failed to retrieve memories', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: "Failed to fetch memory entries" },
       { status: 500 }
     );
   }
 }
 
-// ─── POST: Store New Memory ──────────────────────────────────────────────────
-
+// POST /api/memory - Create or update memory entry (wired to memory-agent)
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { workspaceId, category, key, value, score, source, contextJson } = body;
+    const auth = await requireAuth(request);
 
-    if (!workspaceId || !category || !key || !value) {
+    const body = await request.json();
+    const validation = StoreMemorySchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'workspaceId, category, key, and value are required' },
+        { error: "Validation failed", details: formatZodErrors(validation.error) },
         { status: 400 }
       );
     }
 
-    const input: MemoryInput = {
-      workspaceId,
-      category,
-      key,
-      value,
-      score: score || 0,
-      source: source || 'manual',
-      contextJson: contextJson || undefined,
-    };
+    const data = validation.data;
 
-    const result = await storeMemory(input);
+    // Verify workspace access
+    await requireWorkspaceAccess(request, data.workspaceId);
 
-    console.log(`[Memory API] Stored memory [${category}/${key}] in workspace ${workspaceId} (created=${result.created})`);
+    // Route to memory-agent for LLM-powered enrichment
+    const agentResult = await routeToAgent("memory_update_job", {
+      workspaceId: data.workspaceId,
+      category: data.category,
+      key: data.key,
+      value: data.value,
+      score: data.score,
+      source: data.source,
+      contextJson: data.contextJson,
+      action: "store",
+    }, data.workspaceId);
 
-    return NextResponse.json(
-      {
-        success: true,
-        memoryId: result.id,
-        created: result.created,
-      },
-      { status: 201 }
-    );
+    // Also store directly via the memory system for immediate availability
+    const memorySystem = getMemorySystem(data.workspaceId);
+    const entry = await memorySystem.store({
+      category: data.category,
+      key: data.key,
+      value: data.value,
+      score: data.score,
+      source: data.source,
+      contextJson: data.contextJson,
+    });
+
+    return NextResponse.json({ entry, agentResult });
   } catch (error) {
-    console.error('[Memory API] POST error:', error);
+    if (error instanceof NextResponse) return error;
+    console.error("Memory create error:", error);
     return NextResponse.json(
-      { error: 'Failed to store memory', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: "Failed to create memory entry" },
       { status: 500 }
     );
   }
 }
 
-// ─── PUT: Update Memory Score ────────────────────────────────────────────────
-
+// PUT /api/memory - Update existing memory entry
 export async function PUT(request: NextRequest) {
   try {
+    const auth = await requireAuth(request);
+
     const body = await request.json();
-    const { memoryId, score } = body;
+    const { workspaceId, entryId, ...updateData } = body;
 
-    if (!memoryId || score === undefined) {
+    if (!workspaceId || !entryId) {
       return NextResponse.json(
-        { error: 'memoryId and score are required' },
+        { error: "workspaceId and entryId are required" },
         { status: 400 }
       );
     }
 
-    if (typeof score !== 'number' || score < 0 || score > 100) {
+    // Verify workspace access
+    await requireWorkspaceAccess(request, workspaceId);
+
+    const validation = UpdateMemorySchema.safeParse(updateData);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'score must be a number between 0 and 100' },
+        { error: "Validation failed", details: formatZodErrors(validation.error) },
         { status: 400 }
       );
     }
 
-    await updateMemoryScore(memoryId, score);
+    const data = validation.data;
 
-    console.log(`[Memory API] Updated memory ${memoryId} score to ${score}`);
+    // Verify the entry belongs to this workspace
+    const existing = await db.memoryEntry.findUnique({ where: { id: entryId } });
+    if (!existing || existing.workspaceId !== workspaceId) {
+      return NextResponse.json(
+        { error: "Memory entry not found" },
+        { status: 404 }
+      );
+    }
 
-    return NextResponse.json({
-      success: true,
-      memoryId,
-      score,
+    const updatePayload: Record<string, unknown> = {};
+    if (data.value !== undefined) updatePayload.value = data.value;
+    if (data.score !== undefined) updatePayload.score = data.score;
+    if (data.source !== undefined) updatePayload.source = data.source;
+    if (data.isActive !== undefined) updatePayload.isActive = data.isActive;
+    if (data.contextJson !== undefined) updatePayload.contextJson = JSON.stringify(data.contextJson);
+
+    const entry = await db.memoryEntry.update({
+      where: { id: entryId },
+      data: updatePayload,
     });
+
+    // Route to memory-agent for potential LLM-powered updates
+    const agentResult = await routeToAgent("memory_update_job", {
+      workspaceId,
+      entryId,
+      action: "update",
+      ...data,
+    }, workspaceId);
+
+    return NextResponse.json({ entry, agentResult });
   } catch (error) {
-    console.error('[Memory API] PUT error:', error);
+    if (error instanceof NextResponse) return error;
+    console.error("Memory update error:", error);
     return NextResponse.json(
-      { error: 'Failed to update memory score', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: "Failed to update memory entry" },
       { status: 500 }
     );
   }

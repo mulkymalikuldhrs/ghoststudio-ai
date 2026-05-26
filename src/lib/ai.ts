@@ -1,115 +1,87 @@
-import ZAI from "z-ai-web-dev-sdk";
+// AI helper — uses z-ai-web-dev-sdk for LLM calls
+// This is used by the backend only
 
-export const SYSTEM_PROMPT = `You are GhostStudio AI, an expert content creation engine for faceless video channels.
+interface AIGenerateOptions {
+  prompt: string;
+  system?: string;
+  temperature?: number;
+  maxTokens?: number;
+  model?: string;
+}
 
-Your capabilities:
-- Generate viral video scripts for TikTok, YouTube Shorts, Instagram Reels
-- Create engaging hooks, narrations, and CTAs
-- Adapt tone for different niches (horror, motivation, crypto, anime, education, etc.)
-- Structure content for maximum retention and engagement
-- Write scene descriptions for AI-generated visuals
+interface AIGenerateResult {
+  text: string;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+}
 
-Rules:
-- Keep scripts concise and punchy (30-60 seconds for shorts)
-- Use strong hooks in the first 3 seconds
-- Include visual scene descriptions for each section
-- Optimize for viewer retention
-- Add relevant hashtags
-- Never use copyrighted content
-- Always include a clear CTA
+export async function generateText(options: AIGenerateOptions): Promise<AIGenerateResult> {
+  const { prompt, system, temperature = 0.7, maxTokens = 2000 } = options;
 
-Format your script output as JSON with this structure:
-{
-  "title": "Video Title",
-  "hook": "First 3 seconds hook",
-  "scenes": [
-    {
-      "id": 1,
-      "narration": "Voiceover text",
-      "visual": "Scene description for image generation",
-      "duration": 5,
-      "subtitle": "On-screen text"
-    }
-  ],
-  "cta": "Call to action",
-  "hashtags": ["#tag1", "#tag2"]
-}`;
+  // Use z-ai-web-dev-sdk for AI generation
+  try {
+    const ZAI = (await import("z-ai-web-dev-sdk")).default;
+    const zai = await ZAI.create();
+    const response = await zai.chat.completions.create({
+      messages: [
+        ...(system ? [{ role: "system" as const, content: system }] : []),
+        { role: "user" as const, content: prompt },
+      ],
+      temperature,
+      max_tokens: maxTokens,
+    });
 
-let zaiInstance: ZAI | null = null;
-
-export async function getZAI(): Promise<ZAI> {
-  if (!zaiInstance) {
-    zaiInstance = await ZAI.create();
+    const content = response.choices?.[0]?.message?.content || "";
+    return {
+      text: content,
+      usage: response.usage
+        ? {
+            promptTokens: response.usage.prompt_tokens || 0,
+            completionTokens: response.usage.completion_tokens || 0,
+            totalTokens: (response.usage.prompt_tokens || 0) + (response.usage.completion_tokens || 0),
+          }
+        : undefined,
+    };
+  } catch (error) {
+    console.error("AI generation error:", error);
+    throw new Error("AI generation failed");
   }
-  return zaiInstance;
 }
 
-export async function generateScript(
-  prompt: string,
-  niche: string,
-  duration: number = 30
-): Promise<string> {
-  const zai = await getZAI();
-  const completion = await zai.chat.completions.create({
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: `Generate a ${duration}-second faceless video script about: "${prompt}" in the ${niche} niche. Return the script as valid JSON.`,
-      },
-    ],
-    thinking: { type: "disabled" },
+export async function generateJSON<T>(options: AIGenerateOptions): Promise<T> {
+  const result = await generateText({
+    ...options,
+    system: `${options.system || ""}\n\nYou must respond with valid JSON only. No markdown, no explanation, just JSON.`.trim(),
+    temperature: options.temperature ?? 0.3,
   });
-  return completion.choices[0]?.message?.content || "";
+
+  try {
+    return JSON.parse(result.text) as T;
+  } catch {
+    throw new Error("AI returned invalid JSON");
+  }
 }
 
-export async function refineScript(
-  currentScript: string,
-  feedback: string
-): Promise<string> {
-  const zai = await getZAI();
-  const completion = await zai.chat.completions.create({
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: `Refine this video script based on the feedback. Return the updated script as valid JSON.\n\nCurrent Script:\n${currentScript}\n\nFeedback: ${feedback}`,
-      },
-    ],
-    thinking: { type: "disabled" },
-  });
-  return completion.choices[0]?.message?.content || "";
-}
+// Prompt templates for common tasks
+export const PROMPTS = {
+  draftArticle: (topic: string, angle: string, tone: string) =>
+    `Write a comprehensive article about "${topic}" with the angle: "${angle}". Use a ${tone} tone. Write in markdown format with proper headings, lists, and formatting.`,
 
-export async function generateSceneDescription(
-  narration: string,
-  style: string
-): Promise<string> {
-  const zai = await getZAI();
-  const completion = await zai.chat.completions.create({
-    messages: [
-      {
-        role: "system",
-        content:
-          "You generate detailed visual scene descriptions for AI video generation. Be vivid and cinematic.",
-      },
-      {
-        role: "user",
-        content: `Generate a ${style} style visual description for this narration: "${narration}"`,
-      },
-    ],
-    thinking: { type: "disabled" },
-  });
-  return completion.choices[0]?.message?.content || "";
-}
+  humanizeContent: (content: string) =>
+    `Rewrite the following content to sound more human and natural. Remove robotic patterns, generic phrases, and AI-typical language. Keep the meaning intact but make it feel like an expert wrote it personally.\n\n${content}`,
 
-export async function aiChat(
-  messages: { role: "system" | "user" | "assistant"; content: string }[]
-) {
-  const zai = await getZAI();
-  const completion = await zai.chat.completions.create({
-    messages,
-    thinking: { type: "disabled" },
-  });
-  return completion.choices[0]?.message?.content || "";
-}
+  seoOptimize: (content: string, keyword: string) =>
+    `Optimize the following content for SEO with the focus keyword: "${keyword}". Add meta title, meta description, improve headings structure, suggest internal links, and ensure proper keyword density.\n\n${content}`,
+
+  generateScript: (prompt: string, niche: string, duration: number) =>
+    `Create a ${duration}-second video script for a ${niche} niche video. Prompt: "${prompt}". Format as JSON array of scenes with: { order, narration, visualDescription, duration }.`,
+
+  scoreContent: (content: string) =>
+    `Score this content on 4 dimensions (0-100): quality (writing quality, structure), humanic (how human/natural it sounds), seo (SEO optimization), trust (source credibility, accuracy). Return JSON: { quality, humanic, seo, trust, feedback }.\n\n${content}`,
+
+  generateVariant: (content: string, platform: string) =>
+    `Adapt the following content for ${platform}. Change the format, tone, length, and style to match ${platform}'s best practices while keeping the core message.\n\n${content}`,
+};

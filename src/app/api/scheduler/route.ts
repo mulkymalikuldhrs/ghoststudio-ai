@@ -1,100 +1,96 @@
-/**
- * Scheduler API
- * GET  /api/scheduler — Get queue status
- * POST /api/scheduler — Enqueue job
- * Body: { workspaceId, jobType, payload, priority? }
- */
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { requireAuth, requireWorkspaceAccess } from "@/lib/auth-guard";
+import { CreateSchedulerJobSchema, formatZodErrors } from "@/lib/validators";
+import { enqueueJob, getQueueStatus } from "@/lib/scheduler";
 
-import { NextRequest, NextResponse } from 'next/server';
-import { enqueueJob, getQueueStatus, type JobType } from '@/lib/scheduler';
-
-// ─── GET: Queue Status ───────────────────────────────────────────────────────
-
+// GET /api/scheduler - List scheduler jobs
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request);
+
     const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get('workspaceId');
+    const workspaceId = searchParams.get("workspaceId");
+    const status = searchParams.get("status");
+    const jobType = searchParams.get("jobType");
+    const limit = parseInt(searchParams.get("limit") || "20");
 
     if (!workspaceId) {
       return NextResponse.json(
-        { error: 'workspaceId is required' },
+        { error: "workspaceId is required" },
         { status: 400 }
       );
     }
 
-    const status = await getQueueStatus(workspaceId);
+    // Verify workspace access
+    await requireWorkspaceAccess(request, workspaceId);
 
-    console.log(`[Scheduler API] Queue status for ${workspaceId}: pending=${status.pending}, running=${status.running}`);
+    const where: Record<string, unknown> = { workspaceId };
+    if (status) where.status = status;
+    if (jobType) where.jobType = jobType;
 
-    return NextResponse.json({ status });
+    const [jobs, queueStatus] = await Promise.all([
+      db.schedulerJob.findMany({
+        where,
+        orderBy: [{ priority: "asc" }, { nextAttempt: "asc" }],
+        take: limit,
+      }),
+      getQueueStatus(workspaceId),
+    ]);
+
+    return NextResponse.json({ jobs, queueStatus });
   } catch (error) {
-    console.error('[Scheduler API] GET error:', error);
+    if (error instanceof NextResponse) return error;
+    console.error("Scheduler list error:", error);
     return NextResponse.json(
-      { error: 'Failed to get queue status', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: "Failed to fetch scheduler jobs" },
       { status: 500 }
     );
   }
 }
 
-// ─── POST: Enqueue Job ───────────────────────────────────────────────────────
-
+// POST /api/scheduler - Create scheduler job
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth(request);
+
     const body = await request.json();
-    const { workspaceId, jobType, payload = {}, priority = 5 } = body;
-
-    if (!workspaceId || !jobType) {
+    const validation = CreateSchedulerJobSchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'workspaceId and jobType are required' },
+        { error: "Validation failed", details: formatZodErrors(validation.error) },
         { status: 400 }
       );
     }
 
-    // Validate job type
-    const validJobTypes: JobType[] = [
-      'draft_job',
-      'rewrite_job',
-      'seo_job',
-      'publish_job',
-      'analytics_job',
-      'retry_job',
-      'memory_update_job',
-      'repurpose_job',
-      'scoring_job',
-    ];
+    const data = validation.data;
 
-    if (!validJobTypes.includes(jobType as JobType)) {
-      return NextResponse.json(
-        { error: `Invalid jobType. Must be one of: ${validJobTypes.join(', ')}` },
-        { status: 400 }
-      );
-    }
-
-    // Validate priority
-    const clampedPriority = Math.max(1, Math.min(10, priority));
+    // Verify workspace access
+    await requireWorkspaceAccess(request, data.workspaceId);
 
     const job = await enqueueJob(
-      workspaceId,
-      jobType as JobType,
-      payload,
-      clampedPriority
+      data.workspaceId,
+      data.jobType,
+      data.payloadJson,
+      data.priority
     );
 
-    console.log(`[Scheduler API] Enqueued ${jobType} job ${job.id} for workspace ${workspaceId} (priority=${clampedPriority})`);
+    // If nextAttempt was specified, update it
+    if (data.nextAttempt) {
+      await db.schedulerJob.update({
+        where: { id: job.id },
+        data: { nextAttempt: new Date(data.nextAttempt) },
+      });
+    }
 
-    return NextResponse.json(
-      {
-        success: true,
-        jobId: job.id,
-        jobType,
-        priority: clampedPriority,
-      },
-      { status: 201 }
-    );
+    const createdJob = await db.schedulerJob.findUnique({ where: { id: job.id } });
+
+    return NextResponse.json(createdJob, { status: 201 });
   } catch (error) {
-    console.error('[Scheduler API] POST error:', error);
+    if (error instanceof NextResponse) return error;
+    console.error("Scheduler create error:", error);
     return NextResponse.json(
-      { error: 'Failed to enqueue job', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: "Failed to create scheduler job" },
       { status: 500 }
     );
   }

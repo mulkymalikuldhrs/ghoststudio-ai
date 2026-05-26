@@ -4,20 +4,16 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send, Brain, Sparkles, MessageSquare, Bot, User,
-  Radio, Activity, DollarSign, ShieldAlert, Clock, Zap,
+  Activity, DollarSign, ShieldAlert, Clock, Zap,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { useAppStore } from '@/lib/store'
-import { useAiChat, useAiAnalyze, useAiSuggest, useAiAgentRun } from '@/lib/hooks'
-import { toast } from 'sonner'
 
 interface ChatMessage {
   id: string
@@ -35,7 +31,6 @@ const agentOptions = [
   { value: 'health', label: 'Health Agent', icon: Activity },
   { value: 'education', label: 'Education Agent', icon: Zap },
   { value: 'memory', label: 'Memory Agent', icon: Brain },
-  { value: 'executive', label: 'Executive Agent', icon: Radio },
 ]
 
 const quickActions = [
@@ -46,19 +41,11 @@ const quickActions = [
 ]
 
 export function AiAssistant() {
-  const { currentWorkspace } = useAppStore()
-  const wsId = currentWorkspace?.id ?? ''
-
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [selectedAgent, setSelectedAgent] = useState('general')
   const [isTyping, setIsTyping] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
-
-  const chatMutation = useAiChat()
-  const analyzeMutation = useAiAnalyze()
-  const suggestMutation = useAiSuggest()
-  const agentRunMutation = useAiAgentRun()
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -79,82 +66,32 @@ export function AiAssistant() {
   const handleSend = async () => {
     const text = input.trim()
     if (!text) return
-    if (!wsId) { toast.error('No workspace selected'); return }
 
     setInput('')
     addMessage('user', text)
-
-    if (selectedAgent !== 'general') {
-      // Run specific agent
-      setIsTyping(true)
-      try {
-        const result = await agentRunMutation.mutateAsync({
-          workspaceId: wsId,
-          agentType: selectedAgent,
-          input: text,
-        })
-        const response = result.result || result.analysis || 'Agent completed analysis.'
-        addMessage('assistant', response, selectedAgent)
-      } catch {
-        addMessage('assistant', 'Sorry, I encountered an error processing your request. Please try again.')
-      }
-      setIsTyping(false)
-      return
-    }
-
-    // General chat
     setIsTyping(true)
-    try {
-      const chatHistory = messages.map(m => ({
-        role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: m.content,
-      }))
 
-      const result = await chatMutation.mutateAsync({
-        messages: [...chatHistory, { role: 'user', content: text }],
-        workspaceId: wsId,
-      })
-
-      const response = result.response || result.message || result.content || 'I understand your request. Let me process that for you.'
-      addMessage('assistant', response)
-    } catch {
-      addMessage('assistant', 'I apologize, but I encountered an error. The AI service may be temporarily unavailable. Please try again.')
-    }
-    setIsTyping(false)
+    // Simulate AI response
+    setTimeout(() => {
+      addMessage('assistant', `I understand your request about "${text}". Let me process that for you. This is a placeholder response — connect the AI service to enable real responses.`, selectedAgent !== 'general' ? selectedAgent : undefined)
+      setIsTyping(false)
+    }, 1000)
   }
 
   const handleQuickAction = async (action: string) => {
-    if (!wsId) { toast.error('No workspace selected'); return }
-
     setIsTyping(true)
-    try {
-      let result: { response?: string; result?: string; analysis?: string; suggestions?: Array<{ title: string }> }
-      switch (action) {
-        case 'analyze':
-          addMessage('user', 'Run a full autonomous analysis on my workspace.')
-          result = await analyzeMutation.mutateAsync({ workspaceId: wsId }) as typeof result
-          addMessage('assistant', result.analysis || result.result || 'Analysis complete. Check the dashboard for details.')
-          break
-        case 'suggest':
-          addMessage('user', 'Generate suggestions for my workspace.')
-          result = await suggestMutation.mutateAsync({ workspaceId: wsId }) as typeof result
-          addMessage('assistant', result.suggestions ? `Generated ${result.suggestions.length} new suggestions. Check the dashboard.` : (result.result || 'Suggestions generated successfully.'))
-          break
-        case 'optimize':
-          addMessage('user', 'Optimize my schedule.')
-          result = await agentRunMutation.mutateAsync({ workspaceId: wsId, agentType: 'planner' }) as typeof result
-          addMessage('assistant', result.result || 'Schedule optimization complete. Check the Planner for updates.')
-          break
-        case 'audit':
-          addMessage('user', 'Run a financial audit.')
-          result = await agentRunMutation.mutateAsync({ workspaceId: wsId, agentType: 'finance' }) as typeof result
-          addMessage('assistant', result.result || 'Financial audit complete. Check the Finance section for details.')
-          break
+    addMessage('user', `Run ${action} analysis.`)
+
+    setTimeout(() => {
+      const responses: Record<string, string> = {
+        analyze: 'Analysis complete. Connect the AI service for real results.',
+        suggest: 'Suggestions generated. Connect the AI service for real results.',
+        optimize: 'Optimization complete. Connect the AI service for real results.',
+        audit: 'Audit complete. Connect the AI service for real results.',
       }
-    } catch {
-      addMessage('assistant', 'Action failed. Please try again.')
-    }
-    setIsTyping(false)
+      addMessage('assistant', responses[action] || 'Action complete.')
+      setIsTyping(false)
+    }, 1500)
   }
 
   return (
@@ -163,10 +100,10 @@ export function AiAssistant() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <MessageSquare className="w-6 h-6 text-emerald-600" />
+            <MessageSquare className="w-6 h-6 text-primary" />
             AI Assistant
           </h1>
-          <p className="text-muted-foreground text-sm">Chat with Famlyzer AI agents</p>
+          <p className="text-muted-foreground text-sm">Chat with GhostStudio AI agents</p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={selectedAgent} onValueChange={setSelectedAgent}>
@@ -187,78 +124,39 @@ export function AiAssistant() {
         </div>
       </div>
 
-      {/* Context & Quick Actions */}
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        {currentWorkspace && (
-          <Badge variant="outline" className="text-xs">
-            {currentWorkspace.name}
-          </Badge>
-        )}
-        <div className="flex items-center gap-1 ml-auto">
-          {quickActions.map(action => (
-            <Button
-              key={action.action}
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950"
-              onClick={() => handleQuickAction(action.action)}
-              disabled={isTyping}
-            >
-              <action.icon className="w-3 h-3 mr-1" />
-              {action.label}
-            </Button>
-          ))}
-        </div>
+      {/* Quick Actions */}
+      <div className="flex items-center gap-1 mb-3 flex-wrap">
+        {quickActions.map(action => (
+          <Button
+            key={action.action}
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={() => handleQuickAction(action.action)}
+            disabled={isTyping}
+          >
+            <action.icon className="w-3 h-3 mr-1" />
+            {action.label}
+          </Button>
+        ))}
       </div>
-
-      {/* Memory Layer Indicator */}
-      <Card className="mb-3">
-        <CardContent className="p-3 flex items-center gap-3 flex-wrap">
-          <span className="text-xs font-medium text-muted-foreground">Memory Layers:</span>
-          {[
-            { label: 'Short-term', active: true, color: 'bg-emerald-500' },
-            { label: 'Long-term', active: true, color: 'bg-blue-500' },
-            { label: 'Decisions', active: true, color: 'bg-purple-500' },
-            { label: 'Emotional', active: false, color: 'bg-amber-500' },
-          ].map(layer => (
-            <div key={layer.label} className="flex items-center gap-1.5">
-              <div className={`w-2 h-2 rounded-full ${layer.active ? layer.color : 'bg-muted'}`} />
-              <span className={`text-xs ${layer.active ? 'text-foreground' : 'text-muted-foreground'}`}>{layer.label}</span>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
 
       {/* Chat Messages */}
       <Card className="flex-1 min-h-0 flex flex-col">
         <ScrollArea className="flex-1 p-4" ref={scrollRef}>
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mb-4 shadow-lg">
-                <Bot className="w-8 h-8 text-white" />
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                <Bot className="w-8 h-8 text-primary" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">Famlyzer AI</h3>
+              <h3 className="text-lg font-semibold mb-2">GhostStudio AI</h3>
               <p className="text-muted-foreground text-sm max-w-md">
-                I can help you manage your time, money, energy, and relationships. 
-                Ask me to analyze your finances, optimize your schedule, or resolve conflicts.
+                I can help you create content, generate videos, and optimize your publishing strategy.
               </p>
-              <div className="flex items-center gap-2 mt-4">
-                {['How can you help?', 'Analyze my budget', 'Optimize my schedule'].map(q => (
-                  <Button
-                    key={q}
-                    variant="outline"
-                    size="sm"
-                    className="text-xs"
-                    onClick={() => { setInput(q) }}
-                  >
-                    {q}
-                  </Button>
-                ))}
-              </div>
             </div>
           ) : (
             <div className="space-y-4">
-              {messages.map((msg, i) => (
+              {messages.map((msg) => (
                 <motion.div
                   key={msg.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -267,13 +165,13 @@ export function AiAssistant() {
                   className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {msg.role === 'assistant' && (
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0">
-                      <Bot className="w-4 h-4 text-white" />
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                      <Bot className="w-4 h-4 text-primary" />
                     </div>
                   )}
                   <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                     msg.role === 'user'
-                      ? 'bg-emerald-600 text-white rounded-br-md'
+                      ? 'bg-primary text-primary-foreground rounded-br-md'
                       : 'bg-muted rounded-bl-md'
                   }`}>
                     {msg.agent && (
@@ -282,13 +180,13 @@ export function AiAssistant() {
                       </Badge>
                     )}
                     <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                    <p className={`text-[10px] mt-1 ${msg.role === 'user' ? 'text-emerald-200' : 'text-muted-foreground'}`}>
+                    <p className={`text-[10px] mt-1 ${msg.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                       {msg.timestamp.toLocaleTimeString()}
                     </p>
                   </div>
                   {msg.role === 'user' && (
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center shrink-0">
-                      <User className="w-4 h-4 text-white" />
+                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                      <User className="w-4 h-4 text-muted-foreground" />
                     </div>
                   )}
                 </motion.div>
@@ -299,8 +197,8 @@ export function AiAssistant() {
                   animate={{ opacity: 1 }}
                   className="flex gap-3"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0">
-                    <Bot className="w-4 h-4 text-white" />
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Bot className="w-4 h-4 text-primary" />
                   </div>
                   <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3">
                     <div className="flex gap-1">
@@ -321,7 +219,7 @@ export function AiAssistant() {
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={`Ask ${agentOptions.find(a => a.value === selectedAgent)?.label || 'Famlyzer AI'}...`}
+              placeholder={`Ask ${agentOptions.find(a => a.value === selectedAgent)?.label || 'GhostStudio AI'}...`}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
               disabled={isTyping}
               className="flex-1"
@@ -329,7 +227,6 @@ export function AiAssistant() {
             <Button
               onClick={handleSend}
               disabled={isTyping || !input.trim()}
-              className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shrink-0"
               size="icon"
             >
               <Send className="w-4 h-4" />

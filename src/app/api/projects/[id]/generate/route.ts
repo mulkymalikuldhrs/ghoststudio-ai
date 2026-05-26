@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { generateScript } from "@/lib/ai";
+import { generateText, PROMPTS } from "@/lib/ai";
 
 // POST /api/projects/[id]/generate - Start video generation pipeline
 export async function POST(
@@ -18,7 +18,7 @@ export async function POST(
     const { id } = await params;
 
     // Verify ownership
-    const existingProject = await db.project.findUnique({ where: { id } });
+    const existingProject = await db.videoProject.findUnique({ where: { id } });
     if (!existingProject) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
@@ -31,37 +31,27 @@ export async function POST(
     }
 
     // Update project status
-    await db.project.update({
+    await db.videoProject.update({
       where: { id },
       data: { status: "generating" },
     });
 
     // Generate script using AI
-    const script = await generateScript(
+    const scriptPrompt = PROMPTS.generateScript(
       existingProject.prompt ?? existingProject.title,
       existingProject.niche,
       existingProject.duration || 30
     );
-
-    // Update video with script
-    const videos = await db.video.findMany({
-      where: { projectId: id },
+    const scriptResult = await generateText({
+      prompt: scriptPrompt,
+      system: "You are an expert video script writer. Create engaging, viral video scripts.",
+      temperature: 0.7,
+      maxTokens: 2000,
     });
-
-    if (videos.length > 0) {
-      await db.video.update({
-        where: { id: videos[0].id },
-        data: {
-          script,
-          status: "rendering",
-          renderProgress: 0,
-        },
-      });
-    }
 
     return NextResponse.json({
       message: "Generation started",
-      script,
+      script: scriptResult.text,
       projectId: id,
     });
   } catch (error) {

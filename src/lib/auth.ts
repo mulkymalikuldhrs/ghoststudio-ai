@@ -2,25 +2,21 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GitHubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
+import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 
-// Simple password hashing using Web Crypto API (no bcrypt dependency needed)
-// In production, consider using argon2 or bcrypt via a worker thread
+const SALT_ROUNDS = 12;
+
+// Secure password hashing using bcrypt
 export async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + (process.env.NEXTAUTH_SECRET ?? "ghoststudio-secret-dev"));
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return bcrypt.hash(password, SALT_ROUNDS);
 }
 
 export async function verifyPassword(
   password: string,
   hashedPassword: string
 ): Promise<boolean> {
-  const hash = await hashPassword(password);
-  return hash === hashedPassword;
+  return bcrypt.compare(password, hashedPassword);
 }
 
 export const authOptions: NextAuthOptions = {
@@ -40,7 +36,6 @@ export const authOptions: NextAuthOptions = {
 
         if (!user || !user.password) return null;
 
-        // Verify hashed password
         const isValid = await verifyPassword(credentials.password, user.password);
         if (!isValid) return null;
 
@@ -68,28 +63,73 @@ export const authOptions: NextAuthOptions = {
           where: { email: user.email },
         });
         if (!existingUser) {
-          await db.user.create({
+          // Create user with default plan and role for OAuth sign-ups
+          const newUser = await db.user.create({
             data: {
               email: user.email,
               name: user.name ?? null,
               avatar: user.image ?? null,
               plan: "free",
+              role: "operator",
+              automationMode: "semi_auto",
             },
           });
-          // Create free subscription for OAuth users
-          const newUser = await db.user.findUnique({
-            where: { email: user.email },
+
+          // Create free subscription for new OAuth users
+          await db.subscription.create({
+            data: {
+              userId: newUser.id,
+              plan: "free",
+              status: "active",
+              currentPeriodStart: new Date(),
+            },
           });
-          if (newUser) {
-            await db.subscription.create({
-              data: {
-                userId: newUser.id,
-                plan: "free",
-                status: "active",
-                currentPeriodStart: new Date(),
-              },
-            });
-          }
+
+          // Create default workspace for new OAuth users
+          await db.workspace.create({
+            data: {
+              name: `${newUser.name || newUser.email}'s Studio`,
+              slug: `studio-${newUser.id.slice(-8)}`,
+              description: "Default workspace",
+              ownerId: newUser.id,
+              settingsJson: JSON.stringify({
+                dna: {
+                  coreVoice: "Direct, grounded, authoritative",
+                  sentenceRhythm: "varied",
+                  forbiddenPatterns: [
+                    "In conclusion",
+                    "It goes without saying",
+                    "At the end of the day",
+                  ],
+                  emotionalTexture: "confident but approachable",
+                  structuralBias: "actionable insights over theory",
+                },
+                scheduling: {
+                  timezone: "UTC",
+                  preferredPublishTimes: ["08:00", "12:00", "18:00"],
+                  maxDailyPosts: 3,
+                  cooldownMinutes: 120,
+                },
+                automation: {
+                  mode: "semi_auto",
+                  autoScheduleThreshold: 80,
+                  requireHumanReview: true,
+                },
+              }),
+            },
+          });
+
+          // Log the OAuth sign-up
+          await db.systemLog.create({
+            data: {
+              service: "api",
+              level: "info",
+              action: "oauth_signup",
+              message: `New OAuth user signed up: ${newUser.email}`,
+              userId: newUser.id,
+              metadataJson: JSON.stringify({ provider: "oauth" }),
+            },
+          });
         }
       }
       return true;
@@ -102,6 +142,9 @@ export const authOptions: NextAuthOptions = {
         if (dbUser) {
           session.user.id = dbUser.id;
           session.user.plan = dbUser.plan;
+          session.user.role = dbUser.role;
+          session.user.automationMode = dbUser.automationMode;
+          session.user.stripeCustomerId = dbUser.stripeCustomerId;
         }
       }
       return session;
@@ -114,6 +157,9 @@ export const authOptions: NextAuthOptions = {
         if (dbUser) {
           token.id = dbUser.id;
           token.plan = dbUser.plan;
+          token.role = dbUser.role;
+          token.automationMode = dbUser.automationMode;
+          token.stripeCustomerId = dbUser.stripeCustomerId;
         }
       }
       return token;

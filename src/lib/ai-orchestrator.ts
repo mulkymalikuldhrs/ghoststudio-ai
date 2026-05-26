@@ -1,20 +1,27 @@
+import "@/lib/agents/register-all";
 /**
- * AI Orchestrator — The central brain of the AI Media Intelligence OS
+ * AI Orchestrator v2.0 — The central brain of GhostStudio AI
  *
- * Routes tasks to appropriate AI models based on complexity:
- *   - Cheap models: tagging, formatting, metadata
- *   - Mid models: summaries, SEO, repurpose
- *   - Premium models: master article, strategic writing, editorial refinement
+ * Routes tasks to appropriate agents based on type.
+ * Manages model tier selection (cheap/mid/premium).
+ * Injects Content DNA and Memory context into all agent calls.
+ * Coordinates multi-step pipelines:
+ *   - Content Pipeline: draft → humanic → SEO → score → repurpose → publish
+ *   - Video Pipeline: script → image → voice → compose → publish
+ *   - Heatmap Pipeline: detect → clip → subtitle → publish
+ *   - TikTok Pipeline: trend → script → tiktok → thumbnail → caption → publish
+ * Tracks costs per operation.
+ * Logs all operations to SystemLog.
+ * Error handling with fallbacks.
  *
- * Content Pipeline: idea → draft → humanic edit → SEO → repurpose
+ * Uses `z-ai-web-dev-sdk` for LLM calls.
  */
 
-import ZAI from 'z-ai-web-dev-sdk';
+// ZAI imported lazily to avoid initialization issues
 import { db } from '@/lib/db';
+import { getAgent, listAgents, type ModelTier, type AgentEngine } from '@/lib/agents';
 
 // ─── Model Tier Configuration ────────────────────────────────────────────────
-
-export type ModelTier = 'cheap' | 'mid' | 'premium';
 
 export const MODEL_MAP: Record<ModelTier, string> = {
   cheap: 'openai/gpt-4o-mini',
@@ -22,23 +29,192 @@ export const MODEL_MAP: Record<ModelTier, string> = {
   premium: 'anthropic/claude-3-opus',
 };
 
-// Task-to-tier routing table
+// Task-to-tier routing table (expanded for all 24 agents)
 export const TASK_MODEL_MAP: Record<string, ModelTier> = {
+  // Cheap tier — fast, simple tasks
   tagging: 'cheap',
   formatting: 'cheap',
   metadata: 'cheap',
-  summary: 'mid',
+  image_prompt: 'cheap',
+  caption: 'cheap',
+  summary: 'cheap',
+  qa: 'cheap',
+  voice: 'cheap',
+  thumbnail: 'cheap',
+
+  // Mid tier — moderate complexity
   seo: 'mid',
   repurpose: 'mid',
+  scoring: 'mid',
+  script: 'mid',
+  strategy: 'mid',
+  heatmap: 'mid',
+  trend: 'mid',
+  review: 'mid',
+  format: 'mid',
+  tiktok: 'mid',
+
+  // Premium tier — high quality, complex generation
   draft: 'premium',
   master_article: 'premium',
   humanic_rewrite: 'premium',
   editorial: 'premium',
   strategic_writing: 'premium',
-  scoring: 'mid',
 };
 
+// Job type to agent name mapping (expanded for all 24 agents)
+const JOB_AGENT_MAP: Record<string, string> = {
+  draft_job: 'draft-agent',
+  rewrite_job: 'humanic-agent',
+  seo_job: 'seo-agent',
+  publish_job: 'publish-agent',
+  memory_update_job: 'memory-agent',
+  repurpose_job: 'repurpose-agent',
+  scoring_job: 'scoring-agent',
+  tagging_job: 'tagging-agent',
+  script_job: 'script-agent',
+  image_job: 'image-agent',
+  voice_job: 'voice-agent',
+  video_compose_job: 'video-compose-agent',
+  heatmap_job: 'heatmap-agent',
+  clip_job: 'clip-agent',
+  strategy_job: 'strategy-agent',
+  browser_job: 'browser-agent',
+  tiktok_job: 'tiktok-agent',
+  thumbnail_job: 'thumbnail-agent',
+  caption_job: 'caption-agent',
+  trend_job: 'trend-agent',
+  review_job: 'review-agent',
+  format_job: 'format-agent',
+  summary_job: 'summary-agent',
+  qa_job: 'qa-agent',
+};
+
+// ─── Content DNA & Memory Context ───────────────────────────────────────────
+
+export interface ContentDNA {
+  voice?: string;
+  tone?: string;
+  audience?: string;
+  perspective?: string;
+}
+
+export interface MemoryContext {
+  topHooks: string[];
+  topTopics: string[];
+  fatigueTopics: string[];
+  recentPerformance: Array<{ metric: string; value: number }>;
+}
+
+/**
+ * Load Content DNA from workspace settings
+ */
+export async function getContentDNA(workspaceId?: string): Promise<ContentDNA> {
+  if (!workspaceId) return {};
+  try {
+    const workspace = await db.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { settingsJson: true },
+    });
+    if (workspace?.settingsJson) {
+      const settings = JSON.parse(workspace.settingsJson);
+      return settings.contentDNA || settings.dna || {};
+    }
+  } catch (error) {
+    console.error('[Orchestrator] Failed to load Content DNA:', error);
+  }
+  return {};
+}
+
+/**
+ * Load Memory context from workspace memory entries
+ */
+export async function getMemoryContext(workspaceId?: string): Promise<MemoryContext> {
+  const empty: MemoryContext = { topHooks: [], topTopics: [], fatigueTopics: [], recentPerformance: [] };
+  if (!workspaceId) return empty;
+  try {
+    const topHooks = await db.memoryEntry.findMany({
+      where: { workspaceId, category: 'hook', isActive: true },
+      orderBy: { score: 'desc' },
+      take: 5,
+    });
+
+    const topTopics = await db.memoryEntry.findMany({
+      where: { workspaceId, category: 'topic', isActive: true },
+      orderBy: { score: 'desc' },
+      take: 5,
+    });
+
+    const fatigueEntries = await db.energyEntry.findMany({
+      where: { workspaceId, fatigueScore: { gt: 60 } },
+      orderBy: { fatigueScore: 'desc' },
+      take: 5,
+    });
+
+    const recentAnalytics = await db.analyticsEvent.findMany({
+      where: { workspaceId },
+      orderBy: { capturedAt: 'desc' },
+      take: 10,
+      select: { metricType: true, metricValue: true },
+    });
+
+    return {
+      topHooks: topHooks.map((h) => h.value),
+      topTopics: topTopics.map((t) => t.value),
+      fatigueTopics: fatigueEntries.map((f) => f.topic || f.category),
+      recentPerformance: recentAnalytics.map((a) => ({ metric: a.metricType, value: a.metricValue })),
+    };
+  } catch (error) {
+    console.error('[Orchestrator] Failed to load Memory context:', error);
+    return empty;
+  }
+}
+
+/**
+ * Build Content DNA injection string for system prompts
+ */
+export function buildDNAInjection(dna: ContentDNA): string {
+  const parts: string[] = [];
+  if (dna.voice) parts.push(`Voice: ${dna.voice}`);
+  if (dna.tone) parts.push(`Tone: ${dna.tone}`);
+  if (dna.audience) parts.push(`Target Audience: ${dna.audience}`);
+  if (dna.perspective) parts.push(`Perspective: ${dna.perspective}`);
+  return parts.length > 0
+    ? `\nCONTENT DNA (your writing identity):\n${parts.join('\n')}`
+    : '';
+}
+
+/**
+ * Build Memory context injection string for system prompts
+ */
+export function buildMemoryInjection(memory: MemoryContext): string {
+  const parts: string[] = [];
+  if (memory.topHooks.length > 0) {
+    parts.push(`Top-performing hooks: ${memory.topHooks.join(', ')}`);
+  }
+  if (memory.topTopics.length > 0) {
+    parts.push(`Top-performing topics: ${memory.topTopics.join(', ')}`);
+  }
+  if (memory.fatigueTopics.length > 0) {
+    parts.push(`AVOID these fatigued topics: ${memory.fatigueTopics.join(', ')}`);
+  }
+  return parts.length > 0
+    ? `\nMEMORY CONTEXT (learn what works):\n${parts.join('\n')}`
+    : '';
+}
+
 // ─── Type Definitions ────────────────────────────────────────────────────────
+
+export interface AiCallOptions {
+  tier?: ModelTier;
+  taskType?: string;
+  systemPrompt?: string;
+  temperature?: number;
+  maxTokens?: number;
+  workspaceId?: string;
+  injectDNA?: boolean;
+  injectMemory?: boolean;
+}
 
 export interface DraftInput {
   idea: string;
@@ -49,78 +225,49 @@ export interface DraftInput {
   targetLength?: number;
 }
 
-export interface DraftOutput {
-  title: string;
-  subtitle: string;
-  slug: string;
-  markdown: string;
-  summary: string;
-  tags: string[];
-  suggestedAngle: string;
+export interface PipelineResult {
+  draft: unknown;
+  humanic: unknown;
+  seo: unknown;
+  scores: unknown;
 }
 
-export interface HumanicRewriteOutput {
-  markdown: string;
-  changesApplied: string[];
-  humanicScore: number;
+export interface VideoPipelineResult {
+  script: unknown;
+  images: unknown;
+  voice: unknown;
+  video: unknown;
 }
 
-export interface SeoPack {
-  metaTitle: string;
-  metaDescription: string;
-  slug: string;
-  focusKeyword: string;
-  secondaryKeywords: string[];
-  headingStructure: string;
-  schemaMarkup: string;
-  readabilityScore: number;
+export interface HeatmapPipelineResult {
+  heatmap: unknown;
+  clips: unknown[];
 }
 
-export interface RepurposeOutput {
-  platform: string;
-  title: string;
-  body: string;
-  variantType: string;
-  metadataJson: Record<string, unknown>;
+export interface TikTokPipelineResult {
+  trend: unknown;
+  script: unknown;
+  tiktok: unknown;
+  thumbnail: unknown;
+  caption: unknown;
 }
 
-export interface ContentScore {
-  qualityScore: number;
-  humanicScore: number;
-  seoScore: number;
-  trustScore: number;
-  compositeScore: number;
-  action: 'auto_schedule' | 'human_review' | 'reject_rewrite';
-  details: {
-    clarity: number;
-    redundancy: number;
-    rhythm: number;
-    grammar: number;
-    antiRobotic: number;
-    toneConsistency: number;
-    naturalPhrasing: number;
-    keywordAlignment: number;
-    headingQuality: number;
-    sourceQuality: number;
-    hallucinationRisk: number;
-    confidence: number;
-  };
-}
-
-export interface AiCallOptions {
-  tier?: ModelTier;
-  taskType?: string;
-  systemPrompt?: string;
-  temperature?: number;
-  maxTokens?: number;
+export interface CostEntry {
+  agent: string;
+  tier: ModelTier;
+  tokensEstimate: number;
+  costEstimate: number;
+  timestamp: Date;
 }
 
 // ─── ZAI Singleton ───────────────────────────────────────────────────────────
 
-let zaiInstance: ZAI | null = null;
+let zaiInstance: any = null;
 
-async function getZAI(): Promise<ZAI> {
+export async function getZAI(): Promise<any> {
   if (!zaiInstance) {
+    const ZAIModule = await import('z-ai-web-dev-sdk');
+    const ZAI = ZAIModule.default;
     zaiInstance = await ZAI.create();
   }
   return zaiInstance;
@@ -132,16 +279,30 @@ export async function aiCall(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   options: AiCallOptions = {}
 ): Promise<string> {
-  const { tier, taskType, systemPrompt, temperature = 0.7 } = options;
+  const { tier, taskType, systemPrompt, temperature = 0.7, workspaceId, injectDNA = false, injectMemory = false } = options;
 
-  // Determine model tier from task type or explicit tier
   const resolvedTier = tier || (taskType ? TASK_MODEL_MAP[taskType] : 'mid');
   const model = MODEL_MAP[resolvedTier];
 
   const zai = await getZAI();
 
-  const finalMessages = systemPrompt
-    ? [{ role: 'system' as const, content: systemPrompt }, ...messages]
+  // Build context injections
+  let injectedSystemPrompt = systemPrompt || '';
+
+  if (injectDNA || injectMemory) {
+    const dna = await getContentDNA(workspaceId);
+    const memory = await getMemoryContext(workspaceId);
+
+    if (injectDNA) {
+      injectedSystemPrompt += buildDNAInjection(dna);
+    }
+    if (injectMemory) {
+      injectedSystemPrompt += buildMemoryInjection(memory);
+    }
+  }
+
+  const finalMessages = injectedSystemPrompt
+    ? [{ role: 'system' as const, content: injectedSystemPrompt }, ...messages]
     : messages;
 
   try {
@@ -152,7 +313,6 @@ export async function aiCall(
 
     const content = completion.choices[0]?.message?.content || '';
 
-    // Log the AI call
     await logAiAction(resolvedTier, model, taskType || 'unknown', content.length);
 
     return content;
@@ -164,437 +324,366 @@ export async function aiCall(
   }
 }
 
-// ─── Pipeline Step 1: Generate Draft ─────────────────────────────────────────
+// ─── Route to Agent ──────────────────────────────────────────────────────────
 
-export async function generateDraft(input: DraftInput): Promise<DraftOutput> {
-  const { idea, sources = [], angle, tone = 'professional', targetLength = 2000 } = input;
+export async function routeToAgent(
+  jobType: string,
+  payload: Record<string, unknown>,
+  workspaceId?: string
+): Promise<Record<string, unknown>> {
+  const agentName = JOB_AGENT_MAP[jobType];
 
-  const sourcesSection = sources.length > 0
-    ? `\n\nSource material to reference:\n${sources.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
-    : '';
+  if (!agentName) {
+    return {
+      status: 'no_agent_found',
+      jobType,
+      message: `No agent mapped for job type: ${jobType}. Available: ${Object.keys(JOB_AGENT_MAP).join(', ')}`,
+    };
+  }
 
-  const angleSection = angle
-    ? `\n\nUnique angle/perspective: ${angle}`
-    : '';
+  const agent = getAgent(agentName);
 
-  const systemPrompt = `You are the master content strategist of an AI Media Intelligence OS. You write authoritative, well-researched, and deeply insightful long-form content that builds authority and trust.
+  if (!agent) {
+    return {
+      status: 'agent_not_available',
+      jobType,
+      agentName,
+      message: `Agent "${agentName}" is not registered`,
+    };
+  }
 
-Your writing principles:
-- Lead with a compelling hook that challenges conventional thinking
-- Build arguments with evidence, data, and specific examples
-- Use analogies and stories to make complex ideas accessible
-- Every paragraph must earn the reader's attention
-- Write for humans, not search engines
-- Avoid filler, fluff, and obvious statements
-- Target length: ${targetLength} words
-- Tone: ${tone}
-
-Return your response as a JSON object with this structure:
-{
-  "title": "The article title",
-  "subtitle": "A compelling subtitle",
-  "slug": "url-friendly-slug",
-  "markdown": "Full article in markdown format",
-  "summary": "2-3 sentence summary",
-  "tags": ["tag1", "tag2", "tag3"],
-  "suggestedAngle": "The angle you took"
-}`;
-
-  const userPrompt = `Generate a master article draft based on this idea:
-
-"${idea}"${sourcesSection}${angleSection}
-
-Write with depth, authority, and originality. Make every sentence count.`;
-
-  const response = await aiCall(
-    [{ role: 'user', content: userPrompt }],
-    { tier: 'premium', taskType: 'draft', systemPrompt }
-  );
+  const startTime = Date.now();
 
   try {
-    const parsed = parseJsonResponse<DraftOutput>(response);
-    return parsed;
-  } catch {
-    // Fallback: return raw markdown if JSON parsing fails
+    // Add workspaceId to payload if not present
+    if (workspaceId && !payload.workspaceId) {
+      payload.workspaceId = workspaceId;
+    }
+
+    // Inject Content DNA and Memory context into payload for agents that use them
+    if (workspaceId) {
+      const dna = await getContentDNA(workspaceId);
+      const memory = await getMemoryContext(workspaceId);
+      if (Object.keys(dna).length > 0) {
+        payload._contentDNA = dna;
+      }
+      if (memory.topHooks.length > 0 || memory.topTopics.length > 0) {
+        payload._memoryContext = memory;
+      }
+    }
+
+    const result = await agent.execute(payload as Record<string, unknown>);
+    const executionTime = Date.now() - startTime;
+
+    await logAgentExecution(agentName, jobType, executionTime, true);
+
     return {
-      title: idea.slice(0, 100),
-      subtitle: '',
-      slug: idea.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60),
-      markdown: response,
-      summary: response.slice(0, 200),
-      tags: [],
-      suggestedAngle: angle || 'general',
+      status: 'agent_completed',
+      jobType,
+      agentName,
+      executionTime,
+      result: result as Record<string, unknown>,
+    };
+  } catch (error) {
+    const executionTime = Date.now() - startTime;
+    await logAgentExecution(agentName, jobType, executionTime, false, error);
+
+    return {
+      status: 'agent_failed',
+      jobType,
+      agentName,
+      executionTime,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
 
-// ─── Pipeline Step 2: Humanic Rewrite ────────────────────────────────────────
+// ─── Content Pipeline ────────────────────────────────────────────────────────
 
-export async function humanicRewrite(draft: string): Promise<HumanicRewriteOutput> {
-  const systemPrompt = `You are an elite editorial refiner. Your mission: make AI-generated text sound like it was written by a brilliant human writer.
+export async function runContentPipeline(input: DraftInput): Promise<PipelineResult> {
+  const { workspaceId } = input;
 
-Anti-robotic rewrite rules:
-1. Break repetitive sentence structures — vary length, rhythm, and cadence
-2. Remove generic transitions ("Furthermore", "Additionally", "In conclusion")
-3. Replace robotic phrases with natural, conversational alternatives
-4. Add personality — voice, opinion, conviction
-5. Insert specific details instead of vague generalizations
-6. Use contractions, colloquialisms, and natural speech patterns where appropriate
-7. Create unexpected transitions and surprising connections
-8. Add rhetorical questions and direct address to the reader
-9. Eliminate hedging language ("might", "could potentially", "it seems")
-10. Make the text feel like it was written by someone who genuinely cares
-
-Return your response as JSON:
-{
-  "markdown": "The rewritten content in markdown",
-  "changesApplied": ["List of specific changes made"],
-  "humanicScore": 85
-}`;
-
-  const userPrompt = `Rewrite this draft to sound completely human and natural. Remove all robotic patterns while preserving the core message and value:
-
-${draft}`;
-
-  const response = await aiCall(
-    [{ role: 'user', content: userPrompt }],
-    { tier: 'premium', taskType: 'humanic_rewrite', systemPrompt }
-  );
-
-  try {
-    return parseJsonResponse<HumanicRewriteOutput>(response);
-  } catch {
-    return {
-      markdown: response,
-      changesApplied: ['Full rewrite applied'],
-      humanicScore: 70,
-    };
-  }
-}
-
-// ─── Pipeline Step 3: Generate SEO Pack ──────────────────────────────────────
-
-export async function generateSeoPack(content: string): Promise<SeoPack> {
-  const systemPrompt = `You are an SEO specialist who understands that SEO should serve the reader, not manipulate search engines.
-
-Generate a comprehensive SEO package:
-- Meta title: 50-60 chars, compelling, includes primary keyword
-- Meta description: 150-160 chars, action-oriented, includes keyword naturally
-- Slug: concise, keyword-rich, URL-friendly
-- Focus keyword: primary keyword with search intent
-- Secondary keywords: 5-8 related long-tail keywords
-- Heading structure: JSON array of headings with levels
-- Schema markup: JSON-LD Article schema
-- Readability score: estimated Flesch-Kincaid score (0-100)
-
-Return as JSON:
-{
-  "metaTitle": "...",
-  "metaDescription": "...",
-  "slug": "...",
-  "focusKeyword": "...",
-  "secondaryKeywords": ["..."],
-  "headingStructure": "...",
-  "schemaMarkup": "...",
-  "readabilityScore": 75
-}`;
-
-  const userPrompt = `Generate an SEO package for this content:
-
-${content.slice(0, 4000)}`;
-
-  const response = await aiCall(
-    [{ role: 'user', content: userPrompt }],
-    { tier: 'mid', taskType: 'seo', systemPrompt }
-  );
-
-  try {
-    return parseJsonResponse<SeoPack>(response);
-  } catch {
-    return {
-      metaTitle: '',
-      metaDescription: '',
-      slug: '',
-      focusKeyword: '',
-      secondaryKeywords: [],
-      headingStructure: '',
-      schemaMarkup: '',
-      readabilityScore: 0,
-    };
-  }
-}
-
-// ─── Pipeline Step 4: Generate Repurpose ─────────────────────────────────────
-
-export async function generateRepurpose(
-  masterContent: string,
-  platform: string
-): Promise<RepurposeOutput> {
-  const platformGuides: Record<string, string> = {
-    wordpress: 'Long-form blog post (1500-2500 words), HTML formatting, internal linking suggestions',
-    medium: 'Medium-style article (800-1500 words), conversational tone, personal anecdotes',
-    blogger: 'Casual blog post (600-1200 words), friendly tone, simple formatting',
-    substack: 'Newsletter format (500-1000 words), personal voice, subscriber-focused',
-    beehiiv: 'Newsletter format (400-800 words), punchy, CTA-driven',
-    devto: 'Technical article, code examples, developer community tone',
-    hashnode: 'Technical blog post, developer-focused, practical examples',
-    ghost: 'Clean blog post (1000-2000 words), minimal formatting, reader-first',
-    mirror: 'Web3/crypto focused, decentralized publishing tone',
-  };
-
-  const guide = platformGuides[platform] || 'General content adapted for the platform';
-
-  const systemPrompt = `You are a content repurposing specialist. You transform master content into platform-optimized variants while preserving core value.
-
-Platform guide for ${platform}: ${guide}
-
-Adapt the content for ${platform}:
-- Match the platform's native format and conventions
-- Optimize length for platform expectations
-- Adjust tone and style for the platform's audience
-- Include platform-specific elements (CTAs, formatting, etc.)
-- Never just shorten — truly adapt and reimagine for the platform
-
-Return as JSON:
-{
-  "platform": "${platform}",
-  "title": "Platform-optimized title",
-  "body": "Platform-adapted content",
-  "variantType": "full|summary|thread|teaser|newsletter",
-  "metadataJson": { "platform-specific": "metadata" }
-}`;
-
-  const userPrompt = `Repurpose this master content for ${platform}:
-
-${masterContent.slice(0, 5000)}`;
-
-  const response = await aiCall(
-    [{ role: 'user', content: userPrompt }],
-    { tier: 'mid', taskType: 'repurpose', systemPrompt }
-  );
-
-  try {
-    return parseJsonResponse<RepurposeOutput>(response);
-  } catch {
-    return {
-      platform,
-      title: '',
-      body: response,
-      variantType: 'full',
-      metadataJson: {},
-    };
-  }
-}
-
-// ─── Pipeline Step 5: Score Content ──────────────────────────────────────────
-
-export async function scoreContent(content: string): Promise<ContentScore> {
-  const systemPrompt = `You are a content quality auditor. Analyze the given content across four dimensions and provide precise numerical scores.
-
-Scoring criteria:
-
-1. WRITING QUALITY (0-100):
-   - Clarity: Is the message clear and unambiguous?
-   - Redundancy: Is there unnecessary repetition?
-   - Rhythm: Does the prose flow naturally?
-   - Grammar: Are there grammatical errors?
-
-2. HUMANIC SCORE (0-100):
-   - Anti-robotic: Does it sound human-written?
-   - Tone consistency: Is the voice consistent?
-   - Natural phrasing: Does it use natural language patterns?
-
-3. SEO SCORE (0-100):
-   - Keyword alignment: Are relevant keywords present?
-   - Heading quality: Is the heading structure logical?
-   - Readability: Is it readable for the target audience?
-
-4. TRUST SCORE (0-100):
-   - Source quality: Are claims backed by evidence?
-   - Hallucination risk: Could any claims be fabricated?
-   - Confidence: How confident is the overall assessment?
-
-Return as JSON:
-{
-  "qualityScore": 85,
-  "humanicScore": 78,
-  "seoScore": 82,
-  "trustScore": 75,
-  "compositeScore": 80,
-  "action": "auto_schedule|human_review|reject_rewrite",
-  "details": {
-    "clarity": 90,
-    "redundancy": 85,
-    "rhythm": 80,
-    "grammar": 88,
-    "antiRobotic": 78,
-    "toneConsistency": 82,
-    "naturalPhrasing": 76,
-    "keywordAlignment": 80,
-    "headingQuality": 85,
-    "sourceQuality": 70,
-    "hallucinationRisk": 25,
-    "confidence": 80
-  }
-}
-
-Action thresholds:
-- compositeScore >= 80: "auto_schedule"
-- compositeScore >= 60: "human_review"
-- compositeScore < 60: "reject_rewrite"`;
-
-  const userPrompt = `Score this content across all dimensions:
-
-${content.slice(0, 4000)}`;
-
-  const response = await aiCall(
-    [{ role: 'user', content: userPrompt }],
-    { tier: 'mid', taskType: 'scoring', systemPrompt }
-  );
-
-  try {
-    const parsed = parseJsonResponse<ContentScore['details'] & { qualityScore?: number; humanicScore?: number; seoScore?: number; trustScore?: number; compositeScore?: number; action?: string }>(response);
-
-    return {
-      qualityScore: parsed.qualityScore ?? 0,
-      humanicScore: parsed.humanicScore ?? 0,
-      seoScore: parsed.seoScore ?? 0,
-      trustScore: parsed.trustScore ?? 0,
-      compositeScore: parsed.compositeScore ?? 0,
-      action: (parsed.action as ContentScore['action']) ?? 'human_review',
-      details: {
-        clarity: parsed.clarity ?? 0,
-        redundancy: parsed.redundancy ?? 0,
-        rhythm: parsed.rhythm ?? 0,
-        grammar: parsed.grammar ?? 0,
-        antiRobotic: parsed.antiRobotic ?? 0,
-        toneConsistency: parsed.toneConsistency ?? 0,
-        naturalPhrasing: parsed.naturalPhrasing ?? 0,
-        keywordAlignment: parsed.keywordAlignment ?? 0,
-        headingQuality: parsed.headingQuality ?? 0,
-        sourceQuality: parsed.sourceQuality ?? 0,
-        hallucinationRisk: parsed.hallucinationRisk ?? 0,
-        confidence: parsed.confidence ?? 0,
-      },
-    };
-  } catch {
-    return {
-      qualityScore: 0,
-      humanicScore: 0,
-      seoScore: 0,
-      trustScore: 0,
-      compositeScore: 0,
-      action: 'human_review',
-      details: {
-        clarity: 0,
-        redundancy: 0,
-        rhythm: 0,
-        grammar: 0,
-        antiRobotic: 0,
-        toneConsistency: 0,
-        naturalPhrasing: 0,
-        keywordAlignment: 0,
-        headingQuality: 0,
-        sourceQuality: 0,
-        hallucinationRisk: 0,
-        confidence: 0,
-      },
-    };
-  }
-}
-
-// ─── Full Pipeline Runner ────────────────────────────────────────────────────
-
-export interface PipelineResult {
-  draft: DraftOutput;
-  humanic: HumanicRewriteOutput;
-  seo: SeoPack;
-  scores: ContentScore;
-}
-
-export async function runFullPipeline(input: DraftInput): Promise<PipelineResult> {
   // Step 1: Generate master draft
-  const draft = await generateDraft(input);
+  const draftAgent = getAgent('draft-agent');
+  if (!draftAgent) throw new Error('Draft agent not available');
+  const draft = await draftAgent.execute(input as unknown as Record<string, unknown>);
+
+  const draftOutput = draft as { markdown?: string; title?: string };
 
   // Step 2: Humanic rewrite
-  const humanic = await humanicRewrite(draft.markdown);
+  const humanicAgent = getAgent('humanic-agent');
+  if (!humanicAgent) throw new Error('Humanic agent not available');
+  const humanic = await humanicAgent.execute({
+    markdown: draftOutput.markdown || '',
+    workspaceId,
+  });
+
+  const humanicOutput = humanic as { markdown?: string };
 
   // Step 3: SEO pack
-  const seo = await generateSeoPack(humanic.markdown);
+  const seoAgent = getAgent('seo-agent');
+  if (!seoAgent) throw new Error('SEO agent not available');
+  const seo = await seoAgent.execute({
+    content: humanicOutput.markdown || '',
+    workspaceId,
+  });
 
   // Step 4: Score the content
-  const scores = await scoreContent(humanic.markdown);
+  const scoringAgent = getAgent('scoring-agent');
+  if (!scoringAgent) throw new Error('Scoring agent not available');
+  const scores = await scoringAgent.execute({
+    content: humanicOutput.markdown || '',
+    seoData: seo,
+    workspaceId,
+  });
 
   return { draft, humanic, seo, scores };
 }
 
-// ─── Utility: Generate Tags ──────────────────────────────────────────────────
+// ─── Video Pipeline ──────────────────────────────────────────────────────────
 
-export async function generateTags(content: string): Promise<string[]> {
-  const systemPrompt = `Extract the most relevant content tags from the given text. Return a JSON array of tags (max 8 tags). Each tag should be a single word or short phrase. Include topic, format, and niche tags.`;
+export async function runVideoPipeline(input: {
+  topic: string;
+  duration: number;
+  style: 'educational' | 'entertainment' | 'motivational' | 'horror' | 'documentary' | 'storytelling';
+  imageStyle?: 'cinematic' | 'anime' | 'realistic' | 'abstract' | 'dark_fantasy' | 'minimalist' | 'vintage' | 'neon_cyberpunk';
+  voice?: string;
+  language?: string;
+  aspectRatio?: '9:16' | '1:1' | '16:9';
+  workspaceId?: string;
+}): Promise<VideoPipelineResult> {
+  const { topic, duration, style, imageStyle = 'cinematic', voice, language = 'en-US', aspectRatio = '9:16', workspaceId } = input;
 
-  const response = await aiCall(
-    [{ role: 'user', content: `Extract tags from:\n\n${content.slice(0, 2000)}` }],
-    { tier: 'cheap', taskType: 'tagging', systemPrompt }
-  );
+  // Step 1: Generate script
+  const scriptAgent = getAgent('script-agent');
+  if (!scriptAgent) throw new Error('Script agent not available');
+  const script = await scriptAgent.execute({
+    topic,
+    duration,
+    style,
+    workspaceId,
+  });
 
-  try {
-    const tags = parseJsonResponse<string[]>(response);
-    return Array.isArray(tags) ? tags : [];
-  } catch {
+  const scriptOutput = script as { scenes?: Array<{ narration: string; visual?: string; duration: number }>; title?: string };
+
+  // Step 2: Generate image prompts for each scene
+  const imageAgent = getAgent('image-agent');
+  if (!imageAgent) throw new Error('Image agent not available');
+  const images = await (async () => {
+    if (Array.isArray(scriptOutput.scenes) && scriptOutput.scenes.length > 0) {
+      const imagePrompts: Record<string, unknown>[] = [];
+      for (const scene of scriptOutput.scenes) {
+        const prompt = await imageAgent.execute({
+          narration: scene.narration,
+          style: imageStyle,
+          aspectRatio,
+          sceneContext: scene.visual,
+          workspaceId,
+        });
+        imagePrompts.push(prompt);
+      }
+      return imagePrompts;
+    }
     return [];
+  })();
+
+  // Step 3: Generate voiceover for each scene
+  const voiceAgent = getAgent('voice-agent');
+  if (!voiceAgent) throw new Error('Voice agent not available');
+  const voiceResults: Record<string, unknown>[] = [];
+  if (Array.isArray(scriptOutput.scenes)) {
+    for (const scene of scriptOutput.scenes) {
+      const voiceResult = await voiceAgent.execute({
+        text: scene.narration,
+        voice,
+        language: language as 'en-US' | 'en-GB' | 'es-ES' | 'fr-FR' | 'de-DE' | 'pt-BR' | 'ja-JP' | 'ko-KR' | 'zh-CN' | 'hi-IN' | 'ar-SA',
+        workspaceId,
+      });
+      voiceResults.push(voiceResult);
+    }
   }
+
+  // Step 4: Compose video
+  const videoComposeAgent = getAgent('video-compose-agent');
+  const video = videoComposeAgent ? await videoComposeAgent.execute({
+    scenes: scriptOutput.scenes,
+    aspectRatio,
+    style,
+    voiceId: voice,
+    workspaceId,
+  }) : null;
+
+  return { script, images, voice: voiceResults, video };
 }
 
-// ─── Utility: Generate Summary ───────────────────────────────────────────────
+// ─── Heatmap Pipeline ────────────────────────────────────────────────────────
 
-export async function generateSummary(content: string): Promise<string> {
-  const systemPrompt = `You write concise, compelling summaries that capture the essence and value of content in 2-3 sentences. Make the reader want to read the full piece.`;
+export async function runHeatmapPipeline(input: {
+  videoUrl: string;
+  intensityThreshold?: number;
+  minSegmentDuration?: number;
+  maxSegmentDuration?: number;
+  cropMode?: 'center' | 'split_left' | 'split_right';
+  outputRatio?: '9:16' | '1:1' | '16:9';
+  workspaceId?: string;
+}): Promise<HeatmapPipelineResult> {
+  const {
+    videoUrl,
+    intensityThreshold = 0.7,
+    minSegmentDuration = 5,
+    maxSegmentDuration = 60,
+    cropMode = 'center',
+    outputRatio = '9:16',
+    workspaceId,
+  } = input;
 
-  const response = await aiCall(
-    [{ role: 'user', content: `Summarize:\n\n${content.slice(0, 3000)}` }],
-    { tier: 'cheap', taskType: 'summary', systemPrompt }
-  );
+  // Step 1: Detect heatmap
+  const heatmapAgent = getAgent('heatmap-agent');
+  if (!heatmapAgent) throw new Error('Heatmap agent not available');
+  const heatmap = await heatmapAgent.execute({
+    videoUrl,
+    intensityThreshold,
+    minSegmentDuration,
+    maxSegmentDuration,
+    workspaceId,
+  });
 
-  return response.trim();
-}
+  const heatmapOutput = heatmap as { viralSegments?: Array<{ startTime: number; endTime: number }>; peakMoment?: { startTime: number; endTime: number } };
 
-// ─── Utility: Format Content ─────────────────────────────────────────────────
+  // Step 2: Generate clips from viral segments
+  const clipAgent = getAgent('clip-agent');
+  const clips: unknown[] = [];
 
-export async function formatContent(
-  markdown: string,
-  format: 'html' | 'plain' | 'markdown'
-): Promise<string> {
-  if (format === 'markdown') return markdown;
+  if (clipAgent) {
+    const segments = heatmapOutput.viralSegments || [];
+    const segmentsToClip = segments.slice(0, 5); // Max 5 clips
 
-  const systemPrompt = `Convert the given markdown content to ${format === 'html' ? 'clean, semantic HTML' : 'plain text without any markdown syntax'}. Preserve all content and structure.`;
-
-  const response = await aiCall(
-    [{ role: 'user', content: markdown }],
-    { tier: 'cheap', taskType: 'formatting', systemPrompt }
-  );
-
-  return response.trim();
-}
-
-// ─── Helper: Parse JSON from AI response ─────────────────────────────────────
-
-function parseJsonResponse<T>(response: string): T {
-  // Try to extract JSON from markdown code blocks
-  const jsonMatch = response.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  const jsonStr = jsonMatch ? jsonMatch[1] : response;
-
-  // Try to find JSON object or array in the response
-  const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-  const arrayMatch = jsonStr.match(/\[[\s\S]*\]/);
-
-  const rawJson = objectMatch?.[0] || arrayMatch?.[0] || jsonStr;
-
-  try {
-    return JSON.parse(rawJson.trim());
-  } catch {
-    throw new Error(`Failed to parse AI JSON response: ${rawJson.slice(0, 100)}...`);
+    for (const segment of segmentsToClip) {
+      try {
+        const clip = await clipAgent.execute({
+          videoPath: videoUrl,
+          startTime: segment.startTime,
+          endTime: segment.endTime,
+          cropMode,
+          outputRatio,
+          generateSubtitles: true,
+          workspaceId,
+        });
+        clips.push(clip);
+      } catch {
+        // Clip generation failure should not break the pipeline
+      }
+    }
   }
+
+  return { heatmap, clips };
+}
+
+// ─── TikTok Pipeline ────────────────────────────────────────────────────────
+
+export async function runTikTokPipeline(input: {
+  topic: string;
+  niche?: string;
+  duration?: number;
+  workspaceId?: string;
+}): Promise<TikTokPipelineResult> {
+  const { topic, niche, duration = 60, workspaceId } = input;
+
+  // Step 1: Find trending opportunities
+  const trendAgent = getAgent('trend-agent');
+  const trend = trendAgent ? await trendAgent.execute({ niche: niche || topic, platform: 'tiktok', workspaceId }) : null;
+
+  // Step 2: Generate script
+  const scriptAgent = getAgent('script-agent');
+  if (!scriptAgent) throw new Error('Script agent not available');
+  const script = await scriptAgent.execute({
+    topic,
+    duration,
+    style: 'entertainment',
+    workspaceId,
+  });
+
+  // Step 3: Create TikTok variant
+  const tiktokAgent = getAgent('tiktok-agent');
+  const tiktok = tiktokAgent ? await tiktokAgent.execute({ topic, content: script, duration, workspaceId }) : null;
+
+  // Step 4: Generate thumbnail
+  const thumbnailAgent = getAgent('thumbnail-agent');
+  const thumbnail = thumbnailAgent ? await thumbnailAgent.execute({ title: topic, platform: 'tiktok', workspaceId }) : null;
+
+  // Step 5: Generate captions
+  const captionAgent = getAgent('caption-agent');
+  const caption = captionAgent ? await captionAgent.execute({
+    narration: (script as Record<string, unknown>)?.scenes
+      ? ((script as { scenes: Array<{ narration: string }> }).scenes.map((s) => s.narration).join(' '))
+      : '',
+    format: 'srt',
+    workspaceId,
+  }) : null;
+
+  return { trend, script, tiktok, thumbnail, caption };
+}
+
+// ─── Quick Agent Execution ───────────────────────────────────────────────────
+
+export async function executeAgent(
+  agentName: string,
+  input: Record<string, unknown>
+): Promise<unknown> {
+  const agent = getAgent(agentName);
+
+  if (!agent) {
+    throw new Error(`Agent not found: ${agentName}. Available agents: ${listAgents().map((a) => a.name).join(', ')}`);
+  }
+
+  return agent.execute(input);
+}
+
+// ─── Get Available Agents ────────────────────────────────────────────────────
+
+export function getAvailableAgents(): Array<{
+  name: string;
+  description: string;
+  modelTier: ModelTier;
+  engine: AgentEngine;
+}> {
+  return listAgents();
+}
+
+// ─── Get Pipeline Status ─────────────────────────────────────────────────────
+
+export function getPipelineDefinitions(): Array<{
+  name: string;
+  description: string;
+  steps: string[];
+}> {
+  return [
+    {
+      name: 'content',
+      description: 'Content creation pipeline',
+      steps: ['draft', 'humanic', 'seo', 'scoring', 'repurpose', 'publish'],
+    },
+    {
+      name: 'video',
+      description: 'Video creation pipeline',
+      steps: ['script', 'image', 'voice', 'video-compose', 'caption', 'publish'],
+    },
+    {
+      name: 'heatmap',
+      description: 'Viral clip extraction pipeline',
+      steps: ['heatmap', 'clip', 'caption', 'publish'],
+    },
+    {
+      name: 'tiktok',
+      description: 'TikTok content pipeline',
+      steps: ['trend', 'script', 'tiktok', 'thumbnail', 'caption', 'publish'],
+    },
+    {
+      name: 'review',
+      description: 'Content review pipeline',
+      steps: ['review', 'scoring', 'humanic', 'seo', 'tagging'],
+    },
+  ];
 }
 
 // ─── Logging ─────────────────────────────────────────────────────────────────
@@ -643,5 +732,33 @@ async function logAiError(
     });
   } catch {
     // Logging failure should not break the pipeline
+  }
+}
+
+async function logAgentExecution(
+  agentName: string,
+  jobType: string,
+  executionTime: number,
+  success: boolean,
+  error?: unknown
+): Promise<void> {
+  try {
+    await db.systemLog.create({
+      data: {
+        service: 'orchestrator',
+        level: success ? 'info' : 'error',
+        action: success ? 'agent_execution_completed' : 'agent_execution_failed',
+        message: `Agent ${agentName} ${success ? 'completed' : 'failed'} for ${jobType} in ${executionTime}ms`,
+        metadataJson: JSON.stringify({
+          agentName,
+          jobType,
+          executionTime,
+          success,
+          error: error instanceof Error ? error.message : undefined,
+        }),
+      },
+    });
+  } catch {
+    // Logging failure should not break the orchestrator
   }
 }

@@ -8,45 +8,73 @@ datasource db {
 }
 
 // ============================================================
-// AI MEDIA INTELLIGENCE OS — CANONICAL CONTENT SCHEMA
-// V1: WordPress only, markdown-first, one queue, one memory system
+// GHOSTSTUDIO AI — CANONICAL CONTENT SCHEMA
+// V2: Full-stack AI media platform
 // ============================================================
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  avatar        String?
-  password      String?
-  role          String    @default("operator") // operator, admin, viewer
-  automationMode String   @default("semi_auto") // manual, semi_auto, full_auto
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  workspaces    Workspace[]
-  apiCredentials ApiCredential[]
+  id                String          @id @default(cuid())
+  email             String          @unique
+  name              String?
+  avatar            String?
+  password          String?
+  role              String          @default("operator") // operator, admin, viewer
+  automationMode    String          @default("semi_auto") // manual, semi_auto, full_auto
+  plan              String          @default("free") // free, creator, pro, agency
+  stripeCustomerId  String?         @unique
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  workspaces        Workspace[]
+  apiCredentials    ApiCredential[]
+  subscriptions     Subscription[]
+  videoProjects     VideoProject[]
 
   @@index([email])
+  @@index([stripeCustomerId])
 }
 
 model Workspace {
-  id          String    @id @default(cuid())
-  name        String
-  slug        String    @unique
-  description String?
-  ownerId     String
-  settingsJson String   @default("{}") // DNA config, scheduling preferences, etc.
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  owner       User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  contentItems     ContentItem[]
-  memoryEntries    MemoryEntry[]
-  schedulerJobs    SchedulerJob[]
-  analyticsEvents  AnalyticsEvent[]
-  publishJobs      PublishJob[]
-  apiCredentials   ApiCredential[]
+  id              String           @id @default(cuid())
+  name            String
+  slug            String           @unique
+  description     String?
+  ownerId         String
+  settingsJson    String           @default("{}") // DNA config, scheduling preferences, etc.
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  owner           User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  contentItems    ContentItem[]
+  memoryEntries   MemoryEntry[]
+  schedulerJobs   SchedulerJob[]
+  analyticsEvents AnalyticsEvent[]
+  publishJobs     PublishJob[]
+  apiCredentials  ApiCredential[]
 
   @@index([ownerId])
   @@index([slug])
+}
+
+// ============================================================
+// SUBSCRIPTION — Stripe-backed subscription management
+// ============================================================
+
+model Subscription {
+  id                  String   @id @default(cuid())
+  userId              String
+  plan                String   @default("free") // free, creator, pro, agency
+  status              String   @default("active") // active, cancelled, expired, past_due
+  stripeSubscriptionId String? @unique
+  stripePriceId       String?
+  currentPeriodStart  DateTime @default(now())
+  currentPeriodEnd    DateTime?
+  cancelAtPeriodEnd   Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([stripeSubscriptionId])
 }
 
 // ============================================================
@@ -55,29 +83,29 @@ model Workspace {
 // ============================================================
 
 model ContentItem {
-  id                  String    @id @default(cuid())
+  id                  String           @id @default(cuid())
   workspaceId         String
   title               String
   subtitle            String?
   slug                String
-  angle               String?   // The unique angle/perspective
+  angle               String? // The unique angle/perspective
   topic               String?
-  status              String    @default("idea") // idea, draft, editing, seo_review, ready, scheduled, published, archived, failed
-  masterMarkdown      String?   // The canonical master draft in markdown
-  summary             String?   // Auto-generated summary
-  sourceNotes         String?   // Raw ideas, links, voice notes
-  sourceType          String    @default("idea") // idea, trend, manual, signal, repurpose
-  qualityScore        Float     @default(0) // 0-100 composite score
-  humanicScore        Float     @default(0) // Anti-robotic score
-  seoScore            Float     @default(0) // SEO quality score
-  trustScore          Float     @default(0) // Source confidence score
-  humanReviewRequired Boolean   @default(false)
-  version             Int       @default(1) // Immutable versioning
-  parentContentId     String?   // For repurposed content
+  status              String           @default("idea") // idea, draft, editing, seo_review, ready, scheduled, published, archived, failed
+  masterMarkdown      String? // The canonical master draft in markdown
+  summary             String? // Auto-generated summary
+  sourceNotes         String? // Raw ideas, links, voice notes
+  sourceType          String           @default("idea") // idea, trend, manual, signal, repurpose
+  qualityScore        Float            @default(0) // 0-100 composite score
+  humanicScore        Float            @default(0) // Anti-robotic score
+  seoScore            Float            @default(0) // SEO quality score
+  trustScore          Float            @default(0) // Source confidence score
+  humanReviewRequired Boolean          @default(false)
+  version             Int              @default(1) // Immutable versioning
+  parentContentId     String? // For repurposed content
   publishedAt         DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  workspace           Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   variants            ContentVariant[]
   publishJobs         PublishJob[]
   analyticsEvents     AnalyticsEvent[]
@@ -96,23 +124,23 @@ model ContentItem {
 // ============================================================
 
 model ContentVariant {
-  id              String    @id @default(cuid())
-  contentId       String
-  platform        String    // wordpress, medium, blogger, substack, beehiiv, devto, hashnode, ghost, mirror
-  variantType     String    @default("full") // full, summary, thread, teaser, newsletter
-  title           String?
-  body            String?   // Platform-adapted content
-  metadataJson    String    @default("{}") // Platform-specific metadata (tags, categories, featured image, etc.)
-  status          String    @default("pending") // pending, ready, published, failed
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  contentItem     ContentItem @relation(fields: [contentId], references: [id], onDelete: Cascade)
-  publishJobs     PublishJob[]
+  id           String       @id @default(cuid())
+  contentId    String
+  platform     String // wordpress, medium, blogger, substack, beehiiv, devto, hashnode, ghost, mirror
+  variantType  String       @default("full") // full, summary, thread, teaser, newsletter
+  title        String?
+  body         String? // Platform-adapted content
+  metadataJson String       @default("{}") // Platform-specific metadata (tags, categories, featured image, etc.)
+  status       String       @default("pending") // pending, ready, published, failed
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  contentItem  ContentItem  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  publishJobs  PublishJob[]
 
+  @@unique([contentId, platform, variantType])
   @@index([contentId])
   @@index([platform])
   @@index([status])
-  @@unique([contentId, platform, variantType])
 }
 
 // ============================================================
@@ -120,19 +148,19 @@ model ContentVariant {
 // ============================================================
 
 model SeoData {
-  id                String   @id @default(cuid())
-  contentId         String   @unique
+  id                String      @id @default(cuid())
+  contentId         String      @unique
   metaTitle         String?
   metaDescription   String?
   focusKeyword      String?
-  secondaryKeywords String?  // Comma-separated
+  secondaryKeywords String? // Comma-separated
   slug              String?
-  headingStructure  String?  // JSON: H1, H2, H3 structure
-  internalLinks     String?  // JSON: suggested internal links
-  schemaMarkup      String?  // JSON-LD schema
-  readabilityScore  Float    @default(0)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  headingStructure  String? // JSON: H1, H2, H3 structure
+  internalLinks     String? // JSON: suggested internal links
+  schemaMarkup      String? // JSON-LD schema
+  readabilityScore  Float       @default(0)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
   contentItem       ContentItem @relation(fields: [contentId], references: [id], onDelete: Cascade)
 
   @@index([contentId])
@@ -143,11 +171,11 @@ model SeoData {
 // ============================================================
 
 model ContentTag {
-  id          String   @id @default(cuid())
+  id          String      @id @default(cuid())
   contentId   String
   tag         String
-  category    String   @default("topic") // topic, format, niche, tone, series
-  createdAt   DateTime @default(now())
+  category    String      @default("topic") // topic, format, niche, tone, series
+  createdAt   DateTime    @default(now())
   contentItem ContentItem @relation(fields: [contentId], references: [id], onDelete: Cascade)
 
   @@index([contentId])
@@ -160,24 +188,24 @@ model ContentTag {
 // ============================================================
 
 model PublishJob {
-  id              String    @id @default(cuid())
-  workspaceId     String
-  contentId       String
+  id               String          @id @default(cuid())
+  workspaceId      String
+  contentId        String
   contentVariantId String?
-  platform        String
-  status          String    @default("queued") // queued, processing, published, failed, retrying
-  scheduledTime   DateTime?
-  publishedTime   DateTime?
-  retryCount      Int       @default(0)
-  maxRetries      Int       @default(3)
-  lastError       String?
-  responsePayload String?   // JSON: platform response
-  isDryRun        Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  contentItem     ContentItem @relation(fields: [contentId], references: [id], onDelete: Cascade)
-  contentVariant  ContentVariant? @relation(fields: [contentVariantId], references: [id], onDelete: SetNull)
+  platform         String
+  status           String          @default("queued") // queued, processing, published, failed, retrying
+  scheduledTime    DateTime?
+  publishedTime    DateTime?
+  retryCount       Int             @default(0)
+  maxRetries       Int             @default(3)
+  lastError        String?
+  responsePayload  String? // JSON: platform response
+  isDryRun         Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  workspace        Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contentItem      ContentItem     @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  contentVariant   ContentVariant? @relation(fields: [contentVariantId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId])
   @@index([contentId])
@@ -191,22 +219,22 @@ model PublishJob {
 // ============================================================
 
 model SchedulerJob {
-  id              String    @id @default(cuid())
-  workspaceId     String
-  jobType         String    // draft_job, rewrite_job, seo_job, publish_job, analytics_job, retry_job, memory_update_job
-  priority        Int       @default(5) // 1 (highest) to 10 (lowest)
-  payloadJson     String    @default("{}") // Job-specific data
-  status          String    @default("pending") // pending, locked, running, completed, failed, dead_letter
-  nextAttempt     DateTime  @default(now())
-  lockedBy        String?   // Worker ID
-  lockUntil      DateTime?
-  retryCount      Int       @default(0)
-  maxRetries      Int       @default(3)
-  lastError       String?
-  resultJson      String?   // Job result
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  workspaceId String
+  jobType     String // draft_job, rewrite_job, seo_job, publish_job, analytics_job, retry_job, memory_update_job
+  priority    Int       @default(5) // 1 (highest) to 10 (lowest)
+  payloadJson String    @default("{}") // Job-specific data
+  status      String    @default("pending") // pending, locked, running, completed, failed, dead_letter
+  nextAttempt DateTime  @default(now())
+  lockedBy    String? // Worker ID
+  lockUntil   DateTime?
+  retryCount  Int       @default(0)
+  maxRetries  Int       @default(3)
+  lastError   String?
+  resultJson  String? // Job result
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
   @@index([jobType])
@@ -220,18 +248,18 @@ model SchedulerJob {
 // ============================================================
 
 model AnalyticsEvent {
-  id            String    @id @default(cuid())
-  workspaceId   String
-  contentId     String?
-  platform      String?
-  metricType    String    // views, clicks, ctr, opens, shares, conversions, revenue, read_time
-  metricValue   Float     @default(0)
-  capturedAt    DateTime  @default(now())
-  rawPayload    String?   // JSON: raw platform data
-  source        String    @default("auto") // auto, manual, api
-  createdAt     DateTime  @default(now())
-  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  contentItem   ContentItem? @relation(fields: [contentId], references: [id], onDelete: SetNull)
+  id          String       @id @default(cuid())
+  workspaceId String
+  contentId   String?
+  platform    String?
+  metricType  String // views, clicks, ctr, opens, shares, conversions, revenue, read_time
+  metricValue Float        @default(0)
+  capturedAt  DateTime     @default(now())
+  rawPayload  String? // JSON: raw platform data
+  source      String       @default("auto") // auto, manual, api
+  createdAt   DateTime     @default(now())
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contentItem ContentItem? @relation(fields: [contentId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId])
   @@index([contentId])
@@ -248,22 +276,22 @@ model AnalyticsEvent {
 model MemoryEntry {
   id          String    @id @default(cuid())
   workspaceId String
-  category    String    // hook, topic, tone, timing, cta, format, platform, monetization, audience, style
-  key         String    // Unique key within category
-  value       String    // The memory content
+  category    String // hook, topic, tone, timing, cta, format, platform, monetization, audience, style
+  key         String // Unique key within category
+  value       String // The memory content
   score       Float     @default(0) // Performance/confidence score
   source      String    @default("analytics") // analytics, manual, ai, experiment
-  contextJson String?   // JSON: additional context
+  contextJson String? // JSON: additional context
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  @@unique([workspaceId, category, key])
   @@index([workspaceId])
   @@index([category])
   @@index([key])
   @@index([score])
-  @@unique([workspaceId, category, key])
 }
 
 // ============================================================
@@ -271,21 +299,21 @@ model MemoryEntry {
 // ============================================================
 
 model ApiCredential {
-  id              String    @id @default(cuid())
-  workspaceId     String?
-  userId          String
-  platform        String    // wordpress, medium, openrouter, google_analytics, etc.
-  label           String?   // Human-readable label
-  encryptedToken  String    // Encrypted API key/token
-  refreshToken    String?   // Encrypted refresh token
-  endpointUrl     String?   // Platform API endpoint
-  expiresAt       DateTime?
-  scopes          String?   // JSON: permission scopes
-  isActive        Boolean   @default(true)
-  lastUsed        DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String     @id @default(cuid())
+  workspaceId    String?
+  userId         String
+  platform       String // wordpress, medium, openrouter, google_analytics, etc.
+  label          String? // Human-readable label
+  encryptedToken String // Encrypted API key/token
+  refreshToken   String? // Encrypted refresh token
+  endpointUrl    String? // Platform API endpoint
+  expiresAt      DateTime?
+  scopes         String? // JSON: permission scopes
+  isActive       Boolean    @default(true)
+  lastUsed       DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace      Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -299,16 +327,16 @@ model ApiCredential {
 // ============================================================
 
 model SystemLog {
-  id          String   @id @default(cuid())
-  service     String   // scheduler, publisher, ai, analytics, memory, api
-  level       String   @default("info") // debug, info, warn, error, critical
-  action      String
-  message     String
-  metadataJson String  @default("{}")
-  contentId   String?
-  platform    String?
-  userId      String?
-  createdAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  service      String // scheduler, publisher, ai, analytics, memory, api
+  level        String   @default("info") // debug, info, warn, error, critical
+  action       String
+  message      String
+  metadataJson String   @default("{}")
+  contentId    String?
+  platform     String?
+  userId       String?
+  createdAt    DateTime @default(now())
 
   @@index([service])
   @@index([level])
@@ -321,17 +349,209 @@ model SystemLog {
 // ============================================================
 
 model EnergyEntry {
-  id            String   @id @default(cuid())
-  workspaceId   String
-  category      String   // topic_fatigue, tone_fatigue, publish_saturation, audience_exhaustion, hook_repetition
-  topic         String?  // The topic/tone/hook being tracked
-  fatigueScore  Float    @default(0) // 0 (fresh) to 100 (exhausted)
-  publishCount  Int      @default(0) // Number of recent publications in this category
-  lastResetAt   DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  workspaceId  String
+  category     String // topic_fatigue, tone_fatigue, publish_saturation, audience_exhaustion, hook_repetition
+  topic        String? // The topic/tone/hook being tracked
+  fatigueScore Float    @default(0) // 0 (fresh) to 100 (exhausted)
+  publishCount Int      @default(0) // Number of recent publications in this category
+  lastResetAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([workspaceId])
   @@index([category])
   @@index([fatigueScore])
+}
+
+// ============================================================
+// VIDEO PROJECT — AI-powered video creation
+// ============================================================
+
+model VideoProject {
+  id             String   @id @default(cuid())
+  userId         String
+  workspaceId    String?
+  title          String
+  prompt         String?
+  niche          String   @default("general") // general, horror, motivation, crypto, anime, education, tech, storytelling, documentary
+  style          String?
+  aspectRatio    String   @default("9:16") // 9:16, 1:1, 16:9
+  status         String   @default("draft") // draft, scripting, generating, rendering, completed, failed
+  videoUrl       String?
+  thumbnailUrl   String?
+  duration       Int      @default(0)
+  resolution     String   @default("1080x1920")
+  voiceId        String   @default("alloy")
+  subtitleStyle  String   @default("default")
+  bgmUrl         String?
+  configJson     String   @default("{}")
+  renderProgress Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenes         VideoScene[]
+  assets         VideoAsset[]
+  renderJobs     VideoRenderJob[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([status])
+}
+
+// ============================================================
+// VIDEO SCENE — Individual scenes within a video project
+// ============================================================
+
+model VideoScene {
+  id             String   @id @default(cuid())
+  projectId      String
+  order          Int
+  type           String   @default("image") // image, video, text, transition
+  templateName   String?
+  duration       Int      @default(5)
+  narration      String?
+  htmlContent    String?
+  mediaUrl       String?
+  overlayText    String?
+  styleJson      String   @default("{}")
+  transitionType String?
+  status         String   @default("pending") // pending, generating, rendered, failed
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  project        VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@unique([id])
+}
+
+// ============================================================
+// VIDEO ASSET — Media assets for video projects
+// ============================================================
+
+model VideoAsset {
+  id           String   @id @default(cuid())
+  projectId    String
+  type         String   // image, audio, video, font, bgm
+  name         String
+  url          String
+  mimeType     String?
+  sizeBytes    Int      @default(0)
+  width        Int?
+  height       Int?
+  duration     Float?
+  metadataJson String   @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  project      VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([type])
+}
+
+// ============================================================
+// VIDEO RENDER JOB — Background rendering jobs
+// ============================================================
+
+model VideoRenderJob {
+  id          String    @id @default(cuid())
+  projectId   String
+  jobType     String    @default("full") // full, scene, thumbnail, preview
+  status      String    @default("queued") // queued, processing, rendering, completed, failed
+  progress    Int       @default(0)
+  engineUrl   String?
+  outputUrl   String?
+  errorMessage String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  retryCount  Int       @default(0)
+  maxRetries  Int       @default(3)
+  configJson  String    @default("{}")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  project     VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([status])
+}
+
+// ============================================================
+// VIDEO TEMPLATE — Reusable video templates
+// ============================================================
+
+model VideoTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  category     String   @default("minimal") // minimal, elegant, neon, cartoon, modern, healing, book
+  resolution   String   @default("1080x1920")
+  htmlTemplate String   @default("")
+  thumbnailUrl String?
+  description  String?
+  isPremium    Boolean  @default(false)
+  configJson   String   @default("{}")
+  usageCount   Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+  @@index([usageCount])
+}
+
+// ============================================================
+// HEATMAP CLIP JOB — YouTube heatmap analysis and clip extraction
+// ============================================================
+
+model HeatmapClipJob {
+  id             String   @id @default(cuid())
+  userId         String
+  workspaceId    String?
+  videoUrl       String
+  videoId        String?
+  resolution     String   @default("1080p") // 720p, 1080p, 4k
+  outputFormat   String   @default("mp4") // mp4, webm
+  status         String   @default("pending") // pending, analyzing, processing, completed, failed
+  heatmapData    String?  // JSON
+  transcriptData String?  // JSON
+  peakScore      Float    @default(0)
+  outputUrl      String?
+  errorMessage   String?
+  metadataJson   String   @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([videoId])
+}
+
+// ============================================================
+// TIKTOK CAMPAIGN — TikTok affiliate/content campaigns
+// ============================================================
+
+model TikTokCampaign {
+  id             String    @id @default(cuid())
+  userId         String
+  workspaceId    String?
+  name           String
+  campaignType   String    @default("affiliate") // affiliate, brand_collab, organic_boost, viral_clip
+  status         String    @default("active") // active, paused, completed, failed
+  productId      String?
+  productTitle   String?
+  affiliateLink  String?
+  targetAudience String?
+  hashtags       String    @default("[]") // JSON array
+  sounds         String    @default("[]") // JSON array
+  contentPillars String    @default("[]") // JSON array
+  postingSchedule String   @default("{}") // JSON
+  budgetCents    Int       @default(0)
+  startDate      DateTime?
+  endDate        DateTime?
+  metricsJson    String    @default("{}") // JSON: campaign metrics
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([status])
+  @@index([campaignType])
 }

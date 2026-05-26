@@ -1,229 +1,209 @@
-/**
- * Publishing API
- * POST /api/publish — Publish content to platform
- * Body: { contentId, platform, action: 'draft' | 'publish' | 'schedule', scheduledTime? }
- */
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { requireAuth, requireWorkspaceAccess } from "@/lib/auth-guard";
+import { PublishContentSchema, formatZodErrors } from "@/lib/validators";
+import { routeToAgent } from "@/lib/ai-orchestrator";
+import { getEnergySystem } from "@/lib/energy-system";
+import { getPublisher, publishToPlatform, dryRun } from "@/lib/publishers/index";
+import { scheduleContent } from "@/lib/scheduler";
 
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { getPublisher, validateCredentials, type SupportedPlatform } from '@/lib/publishers';
-import { scheduleContent } from '@/lib/scheduler';
-import { checkBeforePublish } from '@/lib/energy-system';
-
+// POST /api/publish - Publish content to a platform
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth(request);
+
     const body = await request.json();
-    const { contentId, platform, action, scheduledTime } = body;
-
-    // Validate required fields
-    if (!contentId || !platform || !action) {
+    const validation = PublishContentSchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'contentId, platform, and action are required' },
+        { error: "Validation failed", details: formatZodErrors(validation.error) },
         { status: 400 }
       );
     }
 
-    const validActions = ['draft', 'publish', 'schedule'];
-    if (!validActions.includes(action)) {
-      return NextResponse.json(
-        { error: `action must be one of: ${validActions.join(', ')}` },
-        { status: 400 }
-      );
-    }
+    const data = validation.data;
 
-    // Fetch content item with variant
     const contentItem = await db.contentItem.findUnique({
-      where: { id: contentId },
-      include: {
-        variants: {
-          where: { platform },
-        },
-        seoData: true,
-      },
+      where: { id: data.contentId },
+      include: { variants: true, seoData: true, contentTags: true },
     });
 
-    if (!contentItem || contentItem.status === 'archived') {
+    if (!contentItem) {
       return NextResponse.json(
-        { error: 'Content item not found' },
+        { error: "Content item not found" },
         { status: 404 }
       );
     }
 
-    // Get the content to publish (variant or master)
-    const variant = contentItem.variants[0];
-    const publishContent = variant?.body || contentItem.masterMarkdown;
-    const publishTitle = variant?.title || contentItem.title;
-
-    if (!publishContent) {
-      return NextResponse.json(
-        { error: 'No content available to publish. Generate a draft first.' },
-        { status: 400 }
-      );
-    }
+    // Verify workspace access
+    await requireWorkspaceAccess(request, contentItem.workspaceId);
 
     // Check energy levels before publishing
-    const energyCheck = await checkBeforePublish(
-      contentItem.workspaceId,
-      contentItem.topic || undefined,
-      undefined,
-      undefined
-    );
-
-    if (!energyCheck.allowed && action === 'publish') {
-      console.warn(`[Publish API] Energy check blocked publishing for ${contentId}: ${energyCheck.warnings.join('; ')}`);
+    const energySystem = getEnergySystem(contentItem.workspaceId);
+    const canPublish = await energySystem.canPublish("publish_saturation", contentItem.topic || undefined);
+    if (!canPublish) {
       return NextResponse.json(
         {
-          error: 'Energy levels too low for publishing',
-          warnings: energyCheck.warnings,
-          fatigueLevels: energyCheck.fatigueLevels,
+          error: "Publishing blocked due to energy fatigue. Consider waiting before publishing.",
+          code: "ENERGY_FATIGUED",
+          suggestion: "Use the energy endpoint to check current levels and cooldown times.",
         },
         { status: 429 }
       );
     }
 
-    // Get workspace credentials for the platform
-    const credentials = await db.apiCredential.findFirst({
-      where: {
-        workspaceId: contentItem.workspaceId,
-        platform,
-        isActive: true,
-      },
-    });
-
-    if (!credentials) {
-      return NextResponse.json(
-        { error: `No ${platform} credentials found for this workspace. Configure credentials first.` },
-        { status: 400 }
-      );
-    }
-
-    // Build credentials object
-    const publisherCredentials = {
-      platform: platform as SupportedPlatform,
-      endpointUrl: credentials.endpointUrl || undefined,
-      username: undefined as string | undefined,
-      password: undefined as string | undefined,
-      apiKey: undefined as string | undefined,
-    };
-
-    // Parse credential data (in production, decrypt encryptedToken)
-    try {
-      const credData = JSON.parse(credentials.encryptedToken);
-      publisherCredentials.username = credData.username;
-      publisherCredentials.password = credData.password;
-      publisherCredentials.apiKey = credData.apiKey;
-    } catch {
-      // If not JSON, treat as a single token/apiKey
-      publisherCredentials.apiKey = credentials.encryptedToken;
-    }
-
-    // Validate credentials
-    const credValidation = validateCredentials(platform as SupportedPlatform, publisherCredentials);
-    if (!credValidation.valid) {
-      return NextResponse.json(
-        { error: `Missing ${platform} credentials: ${credValidation.missing.join(', ')}` },
-        { status: 400 }
-      );
-    }
-
-    // ─── Schedule action ──────────────────────────────────────────────────
-    if (action === 'schedule') {
-      if (!scheduledTime) {
-        return NextResponse.json(
-          { error: 'scheduledTime is required for schedule action' },
-          { status: 400 }
-        );
-      }
-
-      const scheduledDate = new Date(scheduledTime);
-      if (scheduledDate <= new Date()) {
-        return NextResponse.json(
-          { error: 'scheduledTime must be in the future' },
-          { status: 400 }
-        );
-      }
-
-      const scheduleResult = await scheduleContent({
-        workspaceId: contentItem.workspaceId,
-        contentId,
-        platform,
-        scheduledTime: scheduledDate,
-        contentVariantId: variant?.id,
-      });
-
-      console.log(`[Publish API] Content ${contentId} scheduled for ${scheduledDate.toISOString()}`);
-
-      return NextResponse.json({
-        success: true,
-        action: 'schedule',
-        contentId,
-        platform,
-        scheduledTime: scheduledDate.toISOString(),
-        schedulerJobId: scheduleResult.schedulerJobId,
-        publishJobId: scheduleResult.publishJobId,
-      });
-    }
-
-    // ─── Draft / Publish actions (immediate) ──────────────────────────────
-    const publisher = getPublisher(platform as SupportedPlatform, publisherCredentials);
-
-    // Build the post data
-    const postData = {
-      title: publishTitle,
-      content: publishContent,
-      slug: contentItem.slug,
+    // Route through the publish-agent for processing
+    const agentResult = await routeToAgent("publish_job", {
+      contentId: data.contentId,
+      contentVariantId: data.contentVariantId,
+      platform: data.platform,
+      workspaceId: contentItem.workspaceId,
+      isDryRun: data.isDryRun,
+      action: data.action,
+      title: contentItem.title,
+      body: contentItem.masterMarkdown || "",
       excerpt: contentItem.summary || undefined,
-      metaTitle: contentItem.seoData?.metaTitle || undefined,
-    };
+      tags: contentItem.contentTags?.map((t: { tag: string }) => t.tag) || [],
+    }, contentItem.workspaceId);
 
-    let publishResult: unknown;
+    switch (data.action) {
+      case "draft": {
+        // Create a draft on the platform (not published)
+        if (data.isDryRun) {
+          const result = await dryRun(data.platform, {
+            title: contentItem.title,
+            body: contentItem.masterMarkdown || "",
+            excerpt: contentItem.summary || undefined,
+          });
+          return NextResponse.json({ action: "draft", result, agentResult }, { status: 201 });
+        }
 
-    if (action === 'draft') {
-      publishResult = await publisher.createDraft(postData);
-    } else {
-      publishResult = await publisher.publish({
-        ...postData,
-        status: 'publish',
-      });
+        // Create a publish job in draft mode
+        const publishJob = await db.publishJob.create({
+          data: {
+            workspaceId: contentItem.workspaceId,
+            contentId: data.contentId,
+            contentVariantId: data.contentVariantId,
+            platform: data.platform,
+            status: "queued",
+            scheduledTime: null,
+            isDryRun: false,
+          },
+        });
+
+        return NextResponse.json({
+          action: "draft",
+          publishJob,
+          agentResult,
+        }, { status: 201 });
+      }
+
+      case "schedule": {
+        // Schedule for future publishing
+        const scheduledTime = data.scheduledTime ? new Date(data.scheduledTime) : new Date(Date.now() + 2 * 60 * 60 * 1000);
+
+        const scheduleResult = await scheduleContent({
+          workspaceId: contentItem.workspaceId,
+          contentId: data.contentId,
+          platform: data.platform,
+          scheduledTime,
+          contentVariantId: data.contentVariantId,
+          isDryRun: data.isDryRun,
+        });
+
+        // Record energy event
+        await energySystem.recordPublish("publish_saturation", contentItem.topic || undefined);
+
+        return NextResponse.json({
+          action: "schedule",
+          ...scheduleResult,
+          agentResult,
+        }, { status: 201 });
+      }
+
+      case "publish":
+      default: {
+        // Publish immediately
+        const publishJob = await db.publishJob.create({
+          data: {
+            workspaceId: contentItem.workspaceId,
+            contentId: data.contentId,
+            contentVariantId: data.contentVariantId,
+            platform: data.platform,
+            status: "processing",
+            scheduledTime: null,
+            isDryRun: data.isDryRun,
+          },
+        });
+
+        if (data.isDryRun) {
+          const result = await dryRun(data.platform, {
+            title: contentItem.title,
+            body: contentItem.masterMarkdown || "",
+            excerpt: contentItem.summary || undefined,
+          });
+          await db.publishJob.update({
+            where: { id: publishJob.id },
+            data: { status: "published", responsePayload: JSON.stringify(result) },
+          });
+        } else {
+          // Attempt actual publishing
+          try {
+            const result = await publishToPlatform(auth.userId, data.platform, {
+              title: contentItem.title,
+              body: contentItem.masterMarkdown || "",
+              excerpt: contentItem.summary || undefined,
+            });
+
+            if (result.success) {
+              await db.publishJob.update({
+                where: { id: publishJob.id },
+                data: {
+                  status: "published",
+                  publishedTime: new Date(),
+                  responsePayload: JSON.stringify(result.responsePayload || {}),
+                },
+              });
+              await db.contentItem.update({
+                where: { id: data.contentId },
+                data: { status: "published", publishedAt: new Date() },
+              });
+              // Record energy event
+              await energySystem.recordPublish("publish_saturation", contentItem.topic || undefined);
+            } else {
+              await db.publishJob.update({
+                where: { id: publishJob.id },
+                data: {
+                  status: "failed",
+                  lastError: result.error,
+                },
+              });
+            }
+          } catch (publishError) {
+            await db.publishJob.update({
+              where: { id: publishJob.id },
+              data: {
+                status: "failed",
+                lastError: publishError instanceof Error ? publishError.message : "Unknown publish error",
+              },
+            });
+          }
+        }
+
+        const updatedJob = await db.publishJob.findUnique({ where: { id: publishJob.id } });
+
+        return NextResponse.json({
+          action: "publish",
+          publishJob: updatedJob,
+          agentResult,
+        }, { status: 201 });
+      }
     }
-
-    // Record the publish job
-    const publishJob = await db.publishJob.create({
-      data: {
-        workspaceId: contentItem.workspaceId,
-        contentId,
-        contentVariantId: variant?.id || null,
-        platform,
-        status: action === 'draft' ? 'published' : 'published',
-        publishedTime: new Date(),
-        responsePayload: JSON.stringify(publishResult),
-      },
-    });
-
-    // Update content item status
-    await db.contentItem.update({
-      where: { id: contentId },
-      data: {
-        status: action === 'draft' ? 'draft' : 'published',
-        publishedAt: action === 'publish' ? new Date() : undefined,
-      },
-    });
-
-    console.log(`[Publish API] Content ${contentId} ${action}ed to ${platform}`);
-
-    return NextResponse.json({
-      success: true,
-      action,
-      contentId,
-      platform,
-      publishJobId: publishJob.id,
-      result: publishResult,
-      energyWarnings: energyCheck.warnings,
-    });
   } catch (error) {
-    console.error('[Publish API] POST error:', error);
+    if (error instanceof NextResponse) return error;
+    console.error("Publish error:", error);
     return NextResponse.json(
-      { error: 'Publishing failed', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: "Failed to create publish job" },
       { status: 500 }
     );
   }
