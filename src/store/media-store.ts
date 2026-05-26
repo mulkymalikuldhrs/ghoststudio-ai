@@ -1,267 +1,215 @@
-"use client";
+// ────────────────────────────────────────────────────────────────────────────────
+// Media Store — Main OS Dashboard State (Zustand)
+// GhostStudio AI v2.0
+// ────────────────────────────────────────────────────────────────────────────────
 
 import { create } from "zustand";
+import type {
+  ContentItem,
+  VideoProject,
+  HeatmapClipJob,
+  SchedulerJob,
+  QueueStatus,
+  MemoryEntry,
+  EnergyEntry,
+  AnalyticsEvent,
+  AnalyticsSummary,
+} from "@/types";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Tab Types ───────────────────────────────────────────────────────────────
 
-export type ContentStatus =
-  | "idea"
-  | "draft"
-  | "editing"
-  | "seo_review"
-  | "ready"
-  | "scheduled"
-  | "published"
-  | "archived"
-  | "failed";
-
-export interface ContentItem {
-  id: string;
-  workspaceId: string;
-  title: string;
-  subtitle?: string | null;
-  slug: string;
-  angle?: string | null;
-  topic?: string | null;
-  status: ContentStatus;
-  masterMarkdown?: string | null;
-  summary?: string | null;
-  sourceNotes?: string | null;
-  sourceType: string;
-  qualityScore: number;
-  humanicScore: number;
-  seoScore: number;
-  trustScore: number;
-  humanReviewRequired: boolean;
-  version: number;
-  parentContentId?: string | null;
-  publishedAt?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  contentTags?: { id: string; tag: string; category: string }[];
-  seoData?: {
-    id: string;
-    metaTitle?: string | null;
-    metaDescription?: string | null;
-    focusKeyword?: string | null;
-    secondaryKeywords?: string | null;
-    readabilityScore: number;
-  } | null;
-  variants?: ContentVariant[];
-  _count?: { variants: number; analyticsEvents: number };
-}
-
-export interface ContentVariant {
-  id: string;
-  contentId: string;
-  platform: string;
-  variantType: string;
-  title?: string | null;
-  body?: string | null;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface QueueStatus {
-  pending: number;
-  locked: number;
-  running: number;
-  completed: number;
-  failed: number;
-  dead_letter: number;
-  total: number;
-}
-
-export interface SchedulerJob {
-  id: string;
-  workspaceId: string;
-  jobType: string;
-  priority: number;
-  payloadJson: string;
-  status: string;
-  nextAttempt: string;
-  lockedBy?: string | null;
-  retryCount: number;
-  maxRetries: number;
-  lastError?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface MemoryEntry {
-  id: string;
-  workspaceId: string;
-  category: string;
-  key: string;
-  value: string;
-  score: number;
-  source: string;
-  contextJson?: string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface FatigueEntry {
-  id: string;
-  workspaceId: string;
-  category: string;
-  topic?: string | null;
-  fatigueScore: number;
-  publishCount: number;
-  lastResetAt: string;
-  status: "fresh" | "warning" | "exhausted";
-}
-
-export interface EnergyReport {
-  overallEnergy: number;
-  canPublish: boolean;
-  entries: FatigueEntry[];
-  warnings: string[];
-}
-
-export interface AnalyticsSummary {
-  workspaceId: string;
-  period: string;
-  since: string;
-  content: {
-    total: number;
-    byStatus: { status: string; count: number }[];
-    published: number;
-    topPerforming: {
-      id: string;
-      title: string;
-      qualityScore: number;
-      humanicScore: number;
-      seoScore: number;
-      status: string;
-    }[];
-  };
-  publishing: {
-    totalJobs: number;
-    successful: number;
-    successRate: number;
-    byPlatform: { platform: string; count: number }[];
-  };
-  metrics: {
-    type: string;
-    total: number;
-    count: number;
-    average: number;
-  }[];
-  recentEvents: {
-    id: string;
-    metricType: string;
-    metricValue: number;
-    platform?: string | null;
-    capturedAt: string;
-    contentItem?: { id: string; title: string } | null;
-  }[];
-}
+export type OSTab =
+  | "content"
+  | "video"
+  | "publish"
+  | "scheduler"
+  | "memory"
+  | "energy"
+  | "analytics"
+  | "browser"
+  | "heatmap";
 
 export type AutomationMode = "manual" | "semi_auto" | "full_auto";
 
-// ─── Store Interface ──────────────────────────────────────────────────────────
+// ─── Store Interface ─────────────────────────────────────────────────────────
 
 interface MediaStore {
-  // Content
+  // ── Content Pipeline ────────────────────────────────────────────────────
   contentItems: ContentItem[];
-  selectedContent: ContentItem | null;
+  selectedContentId: string | null;
   contentFilter: string;
   setContentItems: (items: ContentItem[]) => void;
-  setSelectedContent: (item: ContentItem | null) => void;
+  setSelectedContentId: (id: string | null) => void;
   setContentFilter: (filter: string) => void;
 
-  // Queue
-  queueStatus: QueueStatus | null;
+  // ── Video Studio ────────────────────────────────────────────────────────
+  videoProjects: VideoProject[];
+  selectedVideoId: string | null;
+  videoFilter: string;
+  setVideoProjects: (projects: VideoProject[]) => void;
+  setSelectedVideoId: (id: string | null) => void;
+  setVideoFilter: (filter: string) => void;
+
+  // ── Heatmap / Viral Lab ─────────────────────────────────────────────────
+  heatmapJobs: HeatmapClipJob[];
+  currentHeatmapUrl: string | null;
+  heatmapSegments: HeatmapClipJob[];
+  setHeatmapJobs: (jobs: HeatmapClipJob[]) => void;
+  setCurrentHeatmapUrl: (url: string | null) => void;
+  setHeatmapSegments: (segments: HeatmapClipJob[]) => void;
+
+  // ── Scheduler ───────────────────────────────────────────────────────────
+  queueStatus: Record<string, number>;
   schedulerJobs: SchedulerJob[];
-  setQueueStatus: (status: QueueStatus) => void;
+  setQueueStatus: (status: Record<string, number>) => void;
   setSchedulerJobs: (jobs: SchedulerJob[]) => void;
 
-  // Memory
+  // ── Memory ──────────────────────────────────────────────────────────────
   memories: MemoryEntry[];
-  memoryFilter: string;
+  memoryCategory: string;
   memorySearch: string;
   setMemories: (memories: MemoryEntry[]) => void;
-  setMemoryFilter: (filter: string) => void;
+  setMemoryCategory: (category: string) => void;
   setMemorySearch: (search: string) => void;
 
-  // Energy
-  energyReport: EnergyReport | null;
-  setEnergyReport: (report: EnergyReport) => void;
-
-  // Analytics
+  // ── Analytics ───────────────────────────────────────────────────────────
   analyticsSummary: AnalyticsSummary | null;
-  setAnalyticsSummary: (summary: AnalyticsSummary) => void;
+  analyticsEvents: AnalyticsEvent[];
+  setAnalyticsSummary: (summary: AnalyticsSummary | null) => void;
+  setAnalyticsEvents: (events: AnalyticsEvent[]) => void;
 
-  // UI State
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
-  isGenerating: boolean;
-  setIsGenerating: (val: boolean) => void;
+  // ── Energy ──────────────────────────────────────────────────────────────
+  energyReport: {
+    overallEnergy: number;
+    canPublish: boolean;
+    entries: EnergyEntry[];
+    warnings: string[];
+  } | null;
+  energyEntries: EnergyEntry[];
+  setEnergyReport: (report: MediaStore["energyReport"]) => void;
+  setEnergyEntries: (entries: EnergyEntry[]) => void;
+
+  // ── Browser ─────────────────────────────────────────────────────────────
+  browserStatus: { active: boolean; pageCount: number } | null;
+  currentScreenshot: string | null;
+  testResults: Record<string, unknown>[];
+  setBrowserStatus: (status: { active: boolean; pageCount: number } | null) => void;
+  setCurrentScreenshot: (screenshot: string | null) => void;
+  setTestResults: (results: Record<string, unknown>[]) => void;
+
+  // ── UI State ────────────────────────────────────────────────────────────
+  activeTab: OSTab;
+  setActiveTab: (tab: OSTab) => void;
   sidebarOpen: boolean;
-  setSidebarOpen: (val: boolean) => void;
-  contentDetailOpen: boolean;
-  setContentDetailOpen: (val: boolean) => void;
-  createDialogOpen: boolean;
-  setCreateDialogOpen: (val: boolean) => void;
+  toggleSidebar: () => void;
+  setSidebarOpen: (open: boolean) => void;
   automationMode: AutomationMode;
   setAutomationMode: (mode: AutomationMode) => void;
-
-  // Workspace
   workspaceId: string;
   setWorkspaceId: (id: string) => void;
+  isLoading: boolean;
+  setIsLoading: (loading: boolean) => void;
+
+  // ── Dialogs ─────────────────────────────────────────────────────────────
+  showCreateContent: boolean;
+  setShowCreateContent: (open: boolean) => void;
+  showCreateVideo: boolean;
+  setShowCreateVideo: (open: boolean) => void;
+  showAddMemory: boolean;
+  setShowAddMemory: (open: boolean) => void;
+  showContentDetail: boolean;
+  setShowContentDetail: (open: boolean) => void;
+  showVideoDetail: boolean;
+  setShowVideoDetail: (open: boolean) => void;
+  showEnqueueJob: boolean;
+  setShowEnqueueJob: (open: boolean) => void;
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export const useMediaStore = create<MediaStore>((set) => ({
-  // Content
+  // ── Content Pipeline ────────────────────────────────────────────────────
   contentItems: [],
-  selectedContent: null,
+  selectedContentId: null,
   contentFilter: "all",
   setContentItems: (items) => set({ contentItems: items }),
-  setSelectedContent: (item) => set({ selectedContent: item }),
+  setSelectedContentId: (id) => set({ selectedContentId: id }),
   setContentFilter: (filter) => set({ contentFilter: filter }),
 
-  // Queue
-  queueStatus: null,
+  // ── Video Studio ────────────────────────────────────────────────────────
+  videoProjects: [],
+  selectedVideoId: null,
+  videoFilter: "all",
+  setVideoProjects: (projects) => set({ videoProjects: projects }),
+  setSelectedVideoId: (id) => set({ selectedVideoId: id }),
+  setVideoFilter: (filter) => set({ videoFilter: filter }),
+
+  // ── Heatmap / Viral Lab ─────────────────────────────────────────────────
+  heatmapJobs: [],
+  currentHeatmapUrl: null,
+  heatmapSegments: [],
+  setHeatmapJobs: (jobs) => set({ heatmapJobs: jobs }),
+  setCurrentHeatmapUrl: (url) => set({ currentHeatmapUrl: url }),
+  setHeatmapSegments: (segments) => set({ heatmapSegments: segments }),
+
+  // ── Scheduler ───────────────────────────────────────────────────────────
+  queueStatus: {},
   schedulerJobs: [],
   setQueueStatus: (status) => set({ queueStatus: status }),
   setSchedulerJobs: (jobs) => set({ schedulerJobs: jobs }),
 
-  // Memory
+  // ── Memory ──────────────────────────────────────────────────────────────
   memories: [],
-  memoryFilter: "all",
+  memoryCategory: "all",
   memorySearch: "",
   setMemories: (memories) => set({ memories }),
-  setMemoryFilter: (filter) => set({ memoryFilter: filter }),
+  setMemoryCategory: (category) => set({ memoryCategory: category }),
   setMemorySearch: (search) => set({ memorySearch: search }),
 
-  // Energy
-  energyReport: null,
-  setEnergyReport: (report) => set({ energyReport: report }),
-
-  // Analytics
+  // ── Analytics ───────────────────────────────────────────────────────────
   analyticsSummary: null,
+  analyticsEvents: [],
   setAnalyticsSummary: (summary) => set({ analyticsSummary: summary }),
+  setAnalyticsEvents: (events) => set({ analyticsEvents: events }),
 
-  // UI State
-  activeTab: "pipeline",
+  // ── Energy ──────────────────────────────────────────────────────────────
+  energyReport: null,
+  energyEntries: [],
+  setEnergyReport: (report) => set({ energyReport: report }),
+  setEnergyEntries: (entries) => set({ energyEntries: entries }),
+
+  // ── Browser ─────────────────────────────────────────────────────────────
+  browserStatus: null,
+  currentScreenshot: null,
+  testResults: [],
+  setBrowserStatus: (status) => set({ browserStatus: status }),
+  setCurrentScreenshot: (screenshot) => set({ currentScreenshot: screenshot }),
+  setTestResults: (results) => set({ testResults: results }),
+
+  // ── UI State ────────────────────────────────────────────────────────────
+  activeTab: "content",
   setActiveTab: (tab) => set({ activeTab: tab }),
-  isGenerating: false,
-  setIsGenerating: (val) => set({ isGenerating: val }),
   sidebarOpen: true,
-  setSidebarOpen: (val) => set({ sidebarOpen: val }),
-  contentDetailOpen: false,
-  setContentDetailOpen: (val) => set({ contentDetailOpen: val }),
-  createDialogOpen: false,
-  setCreateDialogOpen: (val) => set({ createDialogOpen: val }),
+  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+  setSidebarOpen: (open) => set({ sidebarOpen: open }),
   automationMode: "semi_auto",
   setAutomationMode: (mode) => set({ automationMode: mode }),
-
-  // Workspace
   workspaceId: "demo-workspace",
   setWorkspaceId: (id) => set({ workspaceId: id }),
+  isLoading: false,
+  setIsLoading: (loading) => set({ isLoading: loading }),
+
+  // ── Dialogs ─────────────────────────────────────────────────────────────
+  showCreateContent: false,
+  setShowCreateContent: (open) => set({ showCreateContent: open }),
+  showCreateVideo: false,
+  setShowCreateVideo: (open) => set({ showCreateVideo: open }),
+  showAddMemory: false,
+  setShowAddMemory: (open) => set({ showAddMemory: open }),
+  showContentDetail: false,
+  setShowContentDetail: (open) => set({ showContentDetail: open }),
+  showVideoDetail: false,
+  setShowVideoDetail: (open) => set({ showVideoDetail: open }),
+  showEnqueueJob: false,
+  setShowEnqueueJob: (open) => set({ showEnqueueJob: open }),
 }));

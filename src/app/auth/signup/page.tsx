@@ -57,7 +57,7 @@ export default function SignUpPage() {
   return (
     <div className="min-h-screen flex items-center justify-center relative">
       <div className="absolute inset-0 grid-pattern opacity-30" />
-      <div className="absolute bottom-1/3 right-1/3 w-96 h-96 rounded-full opacity-10 blur-3xl gradient-gold" />
+      <div className="absolute bottom-1/3 right-1/3 w-96 h-96 rounded-full opacity-10 blur-3xl gradient-red-white" />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -68,8 +68,8 @@ export default function SignUpPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <a href="/" className="inline-flex items-center gap-2 mb-4">
-            <div className="w-10 h-10 rounded-lg gradient-cyber flex items-center justify-center">
-              <Ghost className="w-6 h-6 text-primary-foreground" />
+            <div className="w-10 h-10 rounded-lg gradient-red flex items-center justify-center shadow-lg shadow-red-500/20">
+              <Ghost className="w-6 h-6 text-white" />
             </div>
             <span className="font-bold text-2xl">
               Ghost<span className="text-primary">Studio</span>
@@ -187,7 +187,7 @@ export default function SignUpPage() {
             <Button
               type="submit"
               disabled={isLoading || !isPasswordValid}
-              className="w-full gradient-cyber text-primary-foreground h-11 glow-cyber-sm"
+              className="w-full gradient-red text-white h-11 glow-red-sm"
             >
               {isLoading ? (
                 <Loader2 className="mr-2 w-4 h-4 animate-spin" />

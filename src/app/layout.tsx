@@ -17,32 +17,38 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Media Intelligence OS — Autonomous Media Operating System",
+  title: "GhostStudio AI v2.0 — Autonomous Media Intelligence OS",
   description:
-    "Memory-driven autonomous media operating system. Authority compounding engine with AI-powered content pipeline, scheduling, analytics, and energy management.",
+    "One OS. Infinite Media Intelligence. Autonomous content + video creation with 15+ AI agents, memory-driven voice, and 9+ platform publishing.",
   keywords: [
-    "AI Media OS",
-    "Content Intelligence",
-    "Autonomous Publishing",
-    "Content Strategy",
-    "Media Operating System",
-    "Memory-Driven Content",
+    "GhostStudio",
+    "AI",
+    "Content OS",
+    "Media Intelligence",
+    "Video Generator",
+    "Faceless",
+    "YouTube",
+    "TikTok",
+    "Instagram Reels",
+    "Auto Publish",
+    "AI Agents",
+    "Autonomous",
   ],
   icons: {
     icon: "/logo.svg",
   },
   openGraph: {
-    title: "AI Media Intelligence OS — Autonomous Media Operating System",
+    title: "GhostStudio AI v2.0 — Autonomous Media Intelligence OS",
     description:
-      "Memory-driven autonomous media operating system. Authority compounding engine with AI-powered content pipeline, scheduling, analytics, and energy management.",
+      "One OS. Infinite Media Intelligence. Autonomous content + video creation with 15+ AI agents, memory-driven voice, and 9+ platform publishing.",
     type: "website",
-    siteName: "AI Media Intelligence OS",
+    siteName: "GhostStudio AI v2.0",
   },
   twitter: {
     card: "summary_large_image",
-    title: "AI Media Intelligence OS — Autonomous Media Operating System",
+    title: "GhostStudio AI v2.0 — Autonomous Media Intelligence OS",
     description:
-      "Memory-driven autonomous media operating system. Authority compounding engine with AI-powered content pipeline, scheduling, analytics, and energy management.",
+      "One OS. Infinite Media Intelligence. Autonomous content + video creation with 15+ AI agents, memory-driven voice, and 9+ platform publishing.",
   },
 };
 
