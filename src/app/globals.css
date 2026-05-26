@@ -37,93 +37,93 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --color-cyber: var(--cyber);
-  --color-cyber-foreground: var(--cyber-foreground);
-  --color-gold: var(--gold);
-  --color-gold-foreground: var(--gold-foreground);
+  --color-media-red: var(--media-red);
+  --color-media-red-foreground: var(--media-red-foreground);
+  --color-media-white: var(--media-white);
+  --color-media-white-foreground: var(--media-white-foreground);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* Light mode - clean professional look */
+/* Light mode — Clean, professional, red & white accent */
 :root {
   --radius: 0.625rem;
-  --background: oklch(0.985 0.002 247);
-  --foreground: oklch(0.145 0.005 247);
+  --background: oklch(0.985 0.002 0);
+  --foreground: oklch(0.145 0.005 0);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0.005 247);
+  --card-foreground: oklch(0.145 0.005 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0.005 247);
-  --primary: oklch(0.71 0.14 192); /* Cyber Cyan */
-  --primary-foreground: oklch(0.15 0.02 247);
-  --secondary: oklch(0.96 0.01 80); /* Tactical Gold light */
-  --secondary-foreground: oklch(0.25 0.05 60);
-  --muted: oklch(0.96 0.005 247);
-  --muted-foreground: oklch(0.55 0.01 247);
-  --accent: oklch(0.96 0.01 80);
-  --accent-foreground: oklch(0.25 0.05 60);
+  --popover-foreground: oklch(0.145 0.005 0);
+  --primary: oklch(0.55 0.24 25); /* Media Red */
+  --primary-foreground: oklch(0.98 0.005 0);
+  --secondary: oklch(0.96 0.005 0);
+  --secondary-foreground: oklch(0.25 0.01 0);
+  --muted: oklch(0.96 0.003 0);
+  --muted-foreground: oklch(0.55 0.01 0);
+  --accent: oklch(0.96 0.01 25);
+  --accent-foreground: oklch(0.35 0.15 25);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0.005 247);
-  --input: oklch(0.91 0.005 247);
-  --ring: oklch(0.71 0.14 192);
-  --chart-1: oklch(0.71 0.14 192);
-  --chart-2: oklch(0.75 0.15 80);
-  --chart-3: oklch(0.65 0.12 280);
-  --chart-4: oklch(0.72 0.16 150);
-  --chart-5: oklch(0.68 0.18 30);
-  --cyber: oklch(0.71 0.14 192);
-  --cyber-foreground: oklch(0.15 0.02 247);
-  --gold: oklch(0.75 0.15 80);
-  --gold-foreground: oklch(0.25 0.05 60);
-  --sidebar: oklch(0.98 0.003 247);
-  --sidebar-foreground: oklch(0.145 0.005 247);
-  --sidebar-primary: oklch(0.71 0.14 192);
-  --sidebar-primary-foreground: oklch(0.15 0.02 247);
-  --sidebar-accent: oklch(0.96 0.005 247);
-  --sidebar-accent-foreground: oklch(0.25 0.01 247);
-  --sidebar-border: oklch(0.91 0.005 247);
-  --sidebar-ring: oklch(0.71 0.14 192);
+  --border: oklch(0.91 0.003 0);
+  --input: oklch(0.91 0.003 0);
+  --ring: oklch(0.55 0.24 25);
+  --chart-1: oklch(0.55 0.24 25);
+  --chart-2: oklch(0.65 0.15 25);
+  --chart-3: oklch(0.45 0.18 0);
+  --chart-4: oklch(0.72 0.10 25);
+  --chart-5: oklch(0.35 0.12 0);
+  --media-red: oklch(0.55 0.24 25);
+  --media-red-foreground: oklch(0.98 0.005 0);
+  --media-white: oklch(0.98 0.005 0);
+  --media-white-foreground: oklch(0.15 0.01 0);
+  --sidebar: oklch(0.98 0.003 0);
+  --sidebar-foreground: oklch(0.145 0.005 0);
+  --sidebar-primary: oklch(0.55 0.24 25);
+  --sidebar-primary-foreground: oklch(0.98 0.005 0);
+  --sidebar-accent: oklch(0.96 0.003 0);
+  --sidebar-accent-foreground: oklch(0.25 0.01 0);
+  --sidebar-border: oklch(0.91 0.003 0);
+  --sidebar-ring: oklch(0.55 0.24 25);
 }
 
-/* Dark mode - Industrial Cyberpunk (DEFAULT) */
+/* Dark mode — Deep charcoal + Red accent */
 .dark {
-  --background: oklch(0.17 0.01 260); /* Deep Charcoal #1A1D20 */
-  --foreground: oklch(0.95 0.005 192);
-  --card: oklch(0.16 0.025 255); /* Midnight Navy #0F172A */
-  --card-foreground: oklch(0.95 0.005 192);
-  --popover: oklch(0.16 0.025 255);
-  --popover-foreground: oklch(0.95 0.005 192);
-  --primary: oklch(0.71 0.14 192); /* Cyber Cyan #00D1C7 */
-  --primary-foreground: oklch(0.12 0.02 260);
-  --secondary: oklch(0.75 0.15 80); /* Tactical Gold #D9A441 */
-  --secondary-foreground: oklch(0.12 0.02 80);
-  --muted: oklch(0.22 0.015 260);
-  --muted-foreground: oklch(0.65 0.02 260);
-  --accent: oklch(0.22 0.015 260);
-  --accent-foreground: oklch(0.95 0.005 192);
+  --background: oklch(0.13 0.005 0);
+  --foreground: oklch(0.95 0.005 0);
+  --card: oklch(0.16 0.01 0);
+  --card-foreground: oklch(0.95 0.005 0);
+  --popover: oklch(0.16 0.01 0);
+  --popover-foreground: oklch(0.95 0.005 0);
+  --primary: oklch(0.60 0.24 25); /* Media Red — vibrant in dark */
+  --primary-foreground: oklch(0.98 0.005 0);
+  --secondary: oklch(0.22 0.01 0);
+  --secondary-foreground: oklch(0.90 0.005 0);
+  --muted: oklch(0.20 0.008 0);
+  --muted-foreground: oklch(0.65 0.01 0);
+  --accent: oklch(0.20 0.02 25);
+  --accent-foreground: oklch(0.95 0.005 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.28 0.02 260);
-  --input: oklch(0.25 0.02 260);
-  --ring: oklch(0.71 0.14 192);
-  --chart-1: oklch(0.71 0.14 192);
-  --chart-2: oklch(0.75 0.15 80);
-  --chart-3: oklch(0.65 0.18 300);
-  --chart-4: oklch(0.72 0.16 150);
-  --chart-5: oklch(0.68 0.18 30);
-  --cyber: oklch(0.71 0.14 192);
-  --cyber-foreground: oklch(0.12 0.02 260);
-  --gold: oklch(0.75 0.15 80);
-  --gold-foreground: oklch(0.12 0.02 80);
-  --sidebar: oklch(0.14 0.025 255);
-  --sidebar-foreground: oklch(0.95 0.005 192);
-  --sidebar-primary: oklch(0.71 0.14 192);
-  --sidebar-primary-foreground: oklch(0.12 0.02 260);
-  --sidebar-accent: oklch(0.22 0.015 260);
-  --sidebar-accent-foreground: oklch(0.95 0.005 192);
-  --sidebar-border: oklch(0.28 0.02 260);
-  --sidebar-ring: oklch(0.71 0.14 192);
+  --border: oklch(0.25 0.01 0);
+  --input: oklch(0.22 0.01 0);
+  --ring: oklch(0.60 0.24 25);
+  --chart-1: oklch(0.60 0.24 25);
+  --chart-2: oklch(0.70 0.15 25);
+  --chart-3: oklch(0.55 0.20 0);
+  --chart-4: oklch(0.75 0.10 25);
+  --chart-5: oklch(0.45 0.18 0);
+  --media-red: oklch(0.60 0.24 25);
+  --media-red-foreground: oklch(0.98 0.005 0);
+  --media-white: oklch(0.98 0.005 0);
+  --media-white-foreground: oklch(0.15 0.01 0);
+  --sidebar: oklch(0.12 0.01 0);
+  --sidebar-foreground: oklch(0.95 0.005 0);
+  --sidebar-primary: oklch(0.60 0.24 25);
+  --sidebar-primary-foreground: oklch(0.98 0.005 0);
+  --sidebar-accent: oklch(0.20 0.008 0);
+  --sidebar-accent-foreground: oklch(0.95 0.005 0);
+  --sidebar-border: oklch(0.25 0.01 0);
+  --sidebar-ring: oklch(0.60 0.24 25);
 }
 
 @layer base {
@@ -135,52 +135,41 @@
   }
 }
 
-/* Cyberpunk custom utilities */
+/* Media OS custom utilities */
 @layer utilities {
-  .glow-cyber {
-    box-shadow: 0 0 20px oklch(0.71 0.14 192 / 30%), 0 0 60px oklch(0.71 0.14 192 / 10%);
+  .glow-red {
+    box-shadow: 0 0 20px oklch(0.60 0.24 25 / 30%), 0 0 60px oklch(0.60 0.24 25 / 10%);
   }
-  .glow-gold {
-    box-shadow: 0 0 20px oklch(0.75 0.15 80 / 30%), 0 0 60px oklch(0.75 0.15 80 / 10%);
+  .glow-red-sm {
+    box-shadow: 0 0 10px oklch(0.60 0.24 25 / 20%);
   }
-  .glow-cyber-sm {
-    box-shadow: 0 0 10px oklch(0.71 0.14 192 / 20%);
+  .text-glow-red {
+    text-shadow: 0 0 10px oklch(0.60 0.24 25 / 50%), 0 0 30px oklch(0.60 0.24 25 / 20%);
   }
-  .text-glow-cyber {
-    text-shadow: 0 0 10px oklch(0.71 0.14 192 / 50%), 0 0 30px oklch(0.71 0.14 192 / 20%);
+  .gradient-red {
+    background: linear-gradient(135deg, oklch(0.60 0.24 25), oklch(0.45 0.28 20));
   }
-  .text-glow-gold {
-    text-shadow: 0 0 10px oklch(0.75 0.15 80 / 50%), 0 0 30px oklch(0.75 0.15 80 / 20%);
+  .gradient-red-white {
+    background: linear-gradient(135deg, oklch(0.60 0.24 25), oklch(0.75 0.15 40));
   }
   .grid-pattern {
     background-image:
-      linear-gradient(oklch(0.28 0.02 260 / 30%) 1px, transparent 1px),
-      linear-gradient(90deg, oklch(0.28 0.02 260 / 30%) 1px, transparent 1px);
+      linear-gradient(oklch(0.25 0.01 0 / 30%) 1px, transparent 1px),
+      linear-gradient(90deg, oklch(0.25 0.01 0 / 30%) 1px, transparent 1px);
     background-size: 40px 40px;
   }
   .grid-pattern-light {
     background-image:
-      linear-gradient(oklch(0.91 0.005 247 / 50%) 1px, transparent 1px),
-      linear-gradient(90deg, oklch(0.91 0.005 247 / 50%) 1px, transparent 1px);
+      linear-gradient(oklch(0.91 0.003 0 / 50%) 1px, transparent 1px),
+      linear-gradient(90deg, oklch(0.91 0.003 0 / 50%) 1px, transparent 1px);
     background-size: 40px 40px;
   }
-  .scanline {
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      oklch(0 0 0 / 3%) 2px,
-      oklch(0 0 0 / 3%) 4px
-    );
+  .signal-pulse {
+    animation: signal-pulse 2s ease-in-out infinite;
   }
-  .gradient-cyber {
-    background: linear-gradient(135deg, oklch(0.71 0.14 192), oklch(0.55 0.18 192));
-  }
-  .gradient-gold {
-    background: linear-gradient(135deg, oklch(0.75 0.15 80), oklch(0.65 0.18 60));
-  }
-  .gradient-mixed {
-    background: linear-gradient(135deg, oklch(0.71 0.14 192), oklch(0.75 0.15 80));
+  @keyframes signal-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
   }
 }
 
@@ -193,9 +182,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.35 0.02 260);
+  background: oklch(0.35 0.01 0);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.45 0.02 260);
+  background: oklch(0.45 0.02 0);
 }

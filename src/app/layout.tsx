@@ -17,34 +17,32 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GhostStudio AI - One Prompt. Infinite Content.",
+  title: "AI Media Intelligence OS — Autonomous Media Operating System",
   description:
-    "AI-powered faceless content empire generator. Create viral videos for TikTok, YouTube Shorts, and Instagram Reels with a single prompt.",
+    "Memory-driven autonomous media operating system. Authority compounding engine with AI-powered content pipeline, scheduling, analytics, and energy management.",
   keywords: [
-    "GhostStudio",
-    "AI",
-    "Content Generator",
-    "Faceless",
-    "Video",
-    "TikTok",
-    "YouTube Shorts",
-    "Instagram Reels",
+    "AI Media OS",
+    "Content Intelligence",
+    "Autonomous Publishing",
+    "Content Strategy",
+    "Media Operating System",
+    "Memory-Driven Content",
   ],
   icons: {
     icon: "/logo.svg",
   },
   openGraph: {
-    title: "GhostStudio AI - One Prompt. Infinite Content.",
+    title: "AI Media Intelligence OS — Autonomous Media Operating System",
     description:
-      "AI-powered faceless content empire generator. Create viral videos for TikTok, YouTube Shorts, and Instagram Reels with a single prompt.",
+      "Memory-driven autonomous media operating system. Authority compounding engine with AI-powered content pipeline, scheduling, analytics, and energy management.",
     type: "website",
-    siteName: "GhostStudio AI",
+    siteName: "AI Media Intelligence OS",
   },
   twitter: {
     card: "summary_large_image",
-    title: "GhostStudio AI - One Prompt. Infinite Content.",
+    title: "AI Media Intelligence OS — Autonomous Media Operating System",
     description:
-      "AI-powered faceless content empire generator. Create viral videos for TikTok, YouTube Shorts, and Instagram Reels with a single prompt.",
+      "Memory-driven autonomous media operating system. Authority compounding engine with AI-powered content pipeline, scheduling, analytics, and energy management.",
   },
 };
 

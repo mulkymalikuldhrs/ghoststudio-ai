@@ -1,10 +1,10 @@
-# 🎬 GhostStudio AI
+# AI Media Intelligence OS
 
-> **One Prompt. Infinite Content.**
+> **Autonomous Media Operating System**
 
-AI Faceless Content Empire Generator — Mesin produksi konten viral otomatis yang mengubah satu prompt menjadi puluhan video shorts siap posting, tanpa kamera, tanpa wajah, tanpa batas.
+Authority Compounding Engine. Memory-Driven Publishing Infrastructure. Not a tool, not a CMS, not an autoblog — an orchestration layer.
 
-![GhostStudio AI](https://img.shields.io/badge/GhostStudio-AI-00D1C7?style=for-the-badge&labelColor=0F172A)
+![AI Media Intelligence OS](https://img.shields.io/badge/AI_Media-Intelligence_OS-DC2626?style=for-the-badge&labelColor=0A0A0A)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
 ![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?style=flat-square&logo=prisma)
@@ -12,152 +12,174 @@ AI Faceless Content Empire Generator — Mesin produksi konten viral otomatis ya
 
 ---
 
-## 🚀 Features
+## Core Philosophy
 
-### Core Engine
-- **Prompt → Viral Script** — AI-generated scripts with hook optimization, retention patterns, and CTA
-- **Script → Scene** — Auto visual generation with B-roll and scene mapping
-- **Auto Motion Engine** — Zoom, shake, pan, beat sync effects
-- **Subtitle Engine** — TikTok-style animated captions with emoji and highlights
-- **AI Voice** — Natural TTS with emotional tone matching
-- **Auto Posting** — Direct publishing to TikTok, YouTube Shorts, Instagram Reels
-- **Analytics Loop** — ML-powered content optimization from performance data
+**Wrong approach:** Spam publishing, AI article farming, quantity-first, copy-paste repurpose.
 
-### Platform
-- 🎨 Industrial Cyberpunk theme (Dark mode default)
-- 🔐 NextAuth.js authentication (GitHub, Google, Email)
-- 💳 Stripe subscription billing
-- 📊 Analytics dashboard with Recharts
-- 🎬 Video project management & rendering pipeline
-- 📱 Fully responsive design
+**Correct approach:** Authority compounding, memory-driven writing, platform-native distribution, analytics adaptation, trust-first monetization.
+
+### The True Content Loop
+
+```
+Signal → Interpretation → Content → Distribution → Audience → Analytics → Memory → Strategy Update → New Signal
+```
+
+The system handles: drafting, rewriting, repurposing, scheduling, publishing, analytics, memory, optimization, trend tracking, audience learning.
+
+The operator only: gives direction, gives ideas, oversees quality, makes strategic decisions.
 
 ---
 
-## 🛠 Tech Stack
+## Key Insight
+
+> **Memory is the moat. Not the model.**
+
+Your competitive advantage isn't which LLM you use — it's the accumulated knowledge of what works for your audience. Every publish cycle makes the next one smarter.
+
+---
+
+## V1 Features
+
+- **Content Pipeline** — Idea → Draft → Humanic Rewrite → SEO → Score → Publish
+- **WordPress Adapter** — Full REST API integration (create draft, publish, schedule, update)
+- **AI Orchestrator** — Model routing (cheap/mid/premium) via OpenRouter
+- **Memory System** — Store and retrieve what works (hooks, topics, tone, timing, CTAs)
+- **Content Scoring** — Writing, Humanic, SEO, Trust dimensions with action thresholds
+- **Energy System** — Fatigue tracking to prevent content decay and audience burnout
+- **Scheduler** — Persistent job queue with priority, retry, and dead-letter support
+- **Dashboard** — Full control panel with Content Pipeline, Scheduler, Memory, Analytics, Energy tabs
+
+---
+
+## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | **Framework** | Next.js 16 (App Router) |
 | **Language** | TypeScript 5 |
 | **Styling** | Tailwind CSS 4 + shadcn/ui |
-| **Database** | Prisma ORM (SQLite) |
-| **Auth** | NextAuth.js v4 |
+| **Database** | Prisma ORM (SQLite → PostgreSQL) |
 | **State** | Zustand + TanStack Query |
+| **AI** | z-ai-web-dev-sdk + OpenRouter |
 | **Charts** | Recharts |
 | **Animation** | Framer Motion |
-| **Payments** | Stripe |
-| **AI** | OpenAI + Replicate + ElevenLabs |
-| **Video** | FFmpeg + Remotion |
+| **Theme** | Red & White accent, Dark/Light mode |
 
 ---
 
-## 📦 Getting Started
-
-### Prerequisites
-- Node.js 18+ or Bun
-- SQLite (included)
-
-### Installation
+## Getting Started
 
 ```bash
 # Clone the repository
-git clone https://github.com/mulkymalikuldhrs/ghoststudio-ai.git
-cd ghoststudio-ai
+git clone https://github.com/mulkymalikuldhrs/ai-media-intelligence-os.git
+cd ai-media-intelligence-os
 
 # Install dependencies
 bun install
 
 # Set up environment variables
 cp .env.example .env
-# Edit .env with your API keys
 
 # Push database schema
 bun run db:push
+
+# Seed with sample data
+bun run db:seed
 
 # Start development server
 bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
 ---
 
-## 💰 Pricing Tiers
-
-| Tier | Price | Features |
-|------|-------|----------|
-| **Free** | $0/mo | 3 videos/bulan, basic templates, watermark |
-| **Creator** | $29/mo | 30 videos/bulan, all templates, no watermark, HD export |
-| **Pro** | $49/mo | 100 videos/bulan, priority rendering, custom voices, analytics |
-| **Agency** | $199/mo | Unlimited, team seats, white-label, API access, SLA |
-
----
-
-## 🏗 Project Structure
+## Project Structure
 
 ```
 src/
 ├── app/
-│   ├── page.tsx                    # Landing page
-│   ├── layout.tsx                  # Root layout
-│   ├── globals.css                 # Theme & styles
-│   ├── auth/
-│   │   ├── signin/page.tsx         # Sign in
-│   │   └── signup/page.tsx         # Sign up
-│   ├── dashboard/
-│   │   ├── page.tsx                # Dashboard home
-│   │   ├── create/page.tsx         # Video creation wizard
-│   │   ├── project/[id]/page.tsx   # Project detail
-│   │   ├── templates/page.tsx      # Template gallery
-│   │   ├── analytics/page.tsx      # Analytics dashboard
-│   │   └── settings/page.tsx       # Settings
+│   ├── page.tsx                    # Full dashboard (content pipeline, scheduler, memory, analytics, energy)
+│   ├── layout.tsx                  # Root layout with theme provider
+│   ├── globals.css                 # Red & white accent theme
 │   └── api/
-│       ├── auth/[...nextauth]/     # NextAuth API
-│       ├── projects/               # Project CRUD
-│       ├── templates/              # Templates API
-│       ├── analytics/              # Analytics API
-│       └── stripe/                 # Stripe webhooks & checkout
-├── components/
-│   ├── ui/                         # shadcn/ui components
-│   ├── landing/                    # Landing page sections
-│   ├── dashboard/                  # Dashboard components
-│   └── video/                      # Video player & editor
+│       ├── content/                # Content CRUD + generation + scoring
+│       ├── publish/                # Platform publishing
+│       ├── scheduler/              # Job queue management
+│       ├── memory/                 # Memory system
+│       ├── energy/                 # Energy/fatigue tracking
+│       └── analytics/              # Analytics ingestion & reporting
 ├── lib/
-│   ├── db.ts                       # Prisma client
-│   ├── auth.ts                     # NextAuth config
-│   ├── stripe.ts                   # Stripe client
-│   ├── ai.ts                       # AI pipeline helpers
-│   └── utils.ts                    # Utility functions
+│   ├── ai-orchestrator.ts          # AI routing (cheap/mid/premium) + content pipeline
+│   ├── memory-system.ts            # Memory store + retrieval + pattern detection
+│   ├── content-scoring.ts          # 4-dimension scoring system
+│   ├── energy-system.ts            # Fatigue tracking + saturation prevention
+│   ├── scheduler.ts                # Persistent job queue with priorities
+│   ├── publishers/
+│   │   ├── wordpress.ts            # WordPress REST API adapter
+│   │   └── index.ts                # Publisher factory (9 platforms)
+│   └── db.ts                       # Prisma client
 ├── store/
-│   ├── project-store.ts            # Project creation state
-│   └── app-store.ts                # Global app state
-└── prisma/
-    └── schema.prisma               # Database schema
+│   └── media-store.ts              # Zustand store for dashboard state
+└── docs/                           # 15 comprehensive spec documents
 ```
 
 ---
 
-## 🎯 Target Users
+## Content Scoring
 
-1. **Faceless Creators** — Horror, motivation, crypto, AI facts, anime recap
-2. **Content Agencies** — Social media management at scale
-3. **Affiliate Marketers** — Product review, CPA, referral content
-
----
-
-## 🔐 Environment Variables
-
-See [.env.example](./.env.example) for all required environment variables.
+| Score | Action |
+|-------|--------|
+| **80+** | Auto-schedule for publishing |
+| **60-79** | Route to human review |
+| **Below 60** | Reject or rewrite |
 
 ---
 
-## 📄 License
+## Automation Modes
+
+| Mode | Behavior |
+|------|----------|
+| **Manual** | Human approves everything |
+| **Semi-Auto** | AI drafts, human approves, auto publish |
+| **Full Auto** | AI handles publishing under rules |
+| **Daily Autonomous** | System generates, schedules, distributes, tracks, learns every day |
+
+---
+
+## Build Phases
+
+| Phase | Focus |
+|-------|-------|
+| **V1** | WordPress only, markdown-first, one queue, one memory system, semi-auto |
+| **V2** | Repurpose engine, analytics ingestion, auto scheduling |
+| **V3** | Multi-platform dashboard, AI routing, full dashboard |
+| **V4** | Trend intelligence, monetization intelligence, audience learning |
+| **V5** | Autonomous strategic publishing |
+
+---
+
+## Documentation
+
+Full specs in `/docs/`:
+- [Architecture](docs/ARCHITECTURE.md) — 7-layer system design
+- [Database](docs/DATABASE.md) — 13 tables with full schema docs
+- [Agents](docs/AGENTS.md) — 10 AI agents
+- [Memory](docs/MEMORY.md) — Memory system philosophy
+- [Content Engine](docs/CONTENT_ENGINE.md) — DNA system, humanic rules
+- [Platform Strategy](docs/PLATFORM_STRATEGY.md) — WordPress hub, distribution channels
+- [AI Routing](docs/AI_ROUTING.md) — Cheap/mid/premium model routing
+- [Energy System](docs/ENERGY_SYSTEM.md) — Fatigue tracking
+- [Build Order](docs/BUILD_ORDER.md) — V1 through V5
+- [Roadmap](docs/ROADMAP.md) — Development roadmap
+
+---
+
+## License
 
 MIT License — see [LICENSE](./LICENSE) for details.
 
 ---
 
-## 👤 Author
+## Author
 
 **Mulky Malikul Dhaher**
 - Email: mulkymalikuldhaher@email.com
@@ -165,4 +187,4 @@ MIT License — see [LICENSE](./LICENSE) for details.
 
 ---
 
-> **"Build a faceless media empire."**
+> **"Build autonomous media infrastructure, not another autoblog."**
