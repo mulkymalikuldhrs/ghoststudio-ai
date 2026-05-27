@@ -181,6 +181,6 @@ export const useMediaStore = create<MediaStore>((set) => ({
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   automationMode: "semi_auto",
   setAutomationMode: (mode) => set({ automationMode: mode }),
-  activeWorkspaceId: "demo-workspace",
+  activeWorkspaceId: "",
   setActiveWorkspaceId: (id) => set({ activeWorkspaceId: id }),
 }));

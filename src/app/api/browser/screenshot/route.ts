@@ -4,6 +4,13 @@ import { authOptions } from "@/lib/auth";
 import { browserManager } from "@/lib/browser/browser-manager";
 import { z } from "zod";
 
+// Helper: Get authenticated user ID or return 401
+async function getAuthUserId(request: NextRequest): Promise<string | null> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return null;
+  return (session.user as { id?: string })?.id || session.user.email;
+}
+
 // Validation schema for screenshot request
 const screenshotSchema = z.object({
   sessionId: z.string().min(1, "sessionId is required"),
@@ -16,9 +23,8 @@ const screenshotSchema = z.object({
 // POST /api/browser/screenshot — Take a screenshot
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const userId = await getAuthUserId(request);
+    if (!userId) {
       return NextResponse.json(
         { error: "Not authenticated" },
         { status: 401 }
@@ -40,11 +46,18 @@ export async function POST(request: NextRequest) {
 
     const { sessionId, selector, fullPage, format, quality } = parsed.data;
 
-    // Verify session exists
+    // Verify session exists and ownership
     if (!browserManager.hasSession(sessionId)) {
       return NextResponse.json(
         { error: `Session not found: ${sessionId}` },
         { status: 404 }
+      );
+    }
+
+    if (!browserManager.isSessionOwner(sessionId, userId)) {
+      return NextResponse.json(
+        { error: "Forbidden: You do not own this session" },
+        { status: 403 }
       );
     }
 

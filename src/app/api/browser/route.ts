@@ -44,7 +44,8 @@ export async function POST(request: NextRequest) {
     }
 
     const options = parsed.data;
-    const browserSession = await browserManager.createSession(options);
+    const userId = (session.user as { id?: string })?.id || session.user?.email || undefined;
+    const browserSession = await browserManager.createSession({ ...options, userId });
 
     return NextResponse.json(
       {
@@ -82,11 +83,16 @@ export async function GET() {
       );
     }
 
+    const userId = (session.user as { id?: string })?.id || session.user?.email;
+    // Only list sessions owned by this user
     const status = browserManager.getStatus();
+    const userSessions = status.sessions.filter(
+      (s) => !s.userId || s.userId === userId
+    );
 
     return NextResponse.json({
-      sessions: status.sessions,
-      activeSessions: status.activeSessions,
+      sessions: userSessions,
+      activeSessions: userSessions.length,
       maxInstances: status.maxInstances,
       idleTimeoutMs: status.idleTimeoutMs,
       uptime: status.uptime,

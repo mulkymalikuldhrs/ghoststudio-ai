@@ -3,6 +3,36 @@
 
 import { type Agent, type AgentResult, registerAgent, type AgentType } from "./index";
 import { generateText } from "@/lib/ai";
+import { db } from "@/lib/db";
+
+interface ContentDNA {
+  coreVoice?: string;
+  sentenceRhythm?: string;
+  forbiddenPatterns?: string[];
+  emotionalTexture?: string;
+  structuralBias?: string;
+  voice?: string;
+  tone?: string;
+  audience?: string;
+  perspective?: string;
+}
+
+async function getContentDNA(workspaceId?: string): Promise<ContentDNA> {
+  if (!workspaceId) return {};
+  try {
+    const workspace = await db.workspace.findUnique({
+      where: { id: workspaceId as string },
+      select: { settingsJson: true },
+    });
+    if (workspace?.settingsJson) {
+      const settings = JSON.parse(workspace.settingsJson);
+      return settings.contentDNA || settings.dna || {};
+    }
+  } catch (error) {
+    console.error("[TikTokAgent] Failed to load Content DNA:", error);
+  }
+  return {};
+}
 
 async function runTikTokAgent(payload: Record<string, unknown>): Promise<AgentResult> {
   const { content, topic, markdown, hook, duration, style, workspaceId } = payload;
@@ -16,7 +46,18 @@ async function runTikTokAgent(payload: Record<string, unknown>): Promise<AgentRe
   }
 
   try {
+    const dna = await getContentDNA(workspaceId as string | undefined);
+    const dnaVoice = dna.coreVoice || dna.voice || "professional yet approachable";
+    const dnaTone = dna.emotionalTexture || dna.tone || "informative and engaging";
+    const forbiddenStr = dna.forbiddenPatterns && dna.forbiddenPatterns.length > 0
+      ? `\nFORBIDDEN PATTERNS (never use): ${dna.forbiddenPatterns.join(', ')}`
+      : '';
+
     const systemPrompt = `You are a TikTok content strategist at GhostStudio AI. Create viral-ready TikTok content from the given input.
+
+CONTENT DNA ALIGNMENT:
+- Voice: ${dnaVoice}
+- Emotional Texture: ${dnaTone}${forbiddenStr}
 
 TikTok best practices:
 1. Hook in first 1-2 seconds (pattern interrupt, bold claim, or question)

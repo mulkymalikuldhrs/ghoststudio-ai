@@ -3,6 +3,36 @@
 
 import { type Agent, type AgentResult, registerAgent, type AgentType } from "./index";
 import { generateText } from "@/lib/ai";
+import { db } from "@/lib/db";
+
+interface ContentDNA {
+  coreVoice?: string;
+  sentenceRhythm?: string;
+  forbiddenPatterns?: string[];
+  emotionalTexture?: string;
+  structuralBias?: string;
+  voice?: string;
+  tone?: string;
+  audience?: string;
+  perspective?: string;
+}
+
+async function getContentDNA(workspaceId?: string): Promise<ContentDNA> {
+  if (!workspaceId) return {};
+  try {
+    const workspace = await db.workspace.findUnique({
+      where: { id: workspaceId as string },
+      select: { settingsJson: true },
+    });
+    if (workspace?.settingsJson) {
+      const settings = JSON.parse(workspace.settingsJson);
+      return settings.contentDNA || settings.dna || {};
+    }
+  } catch (error) {
+    console.error("[FormatAgent] Failed to load Content DNA:", error);
+  }
+  return {};
+}
 
 const FORMAT_SPECS: Record<string, { description: string; rules: string }> = {
   article_to_thread: {
@@ -46,12 +76,23 @@ async function runFormatAgent(payload: Record<string, unknown>): Promise<AgentRe
   }
 
   try {
+    const dna = await getContentDNA(workspaceId as string | undefined);
+    const dnaVoice = dna.coreVoice || dna.voice || "professional yet approachable";
+    const dnaTone = dna.emotionalTexture || dna.tone || "informative and engaging";
+    const forbiddenStr = dna.forbiddenPatterns && dna.forbiddenPatterns.length > 0
+      ? `\nFORBIDDEN PATTERNS (never use): ${dna.forbiddenPatterns.join(', ')}`
+      : '';
+
     const formatSpec = FORMAT_SPECS[inputTarget.toLowerCase()] || {
       description: `Convert to ${inputTarget} format`,
       rules: `Adapt the content to the ${inputTarget} format while preserving key information.`,
     };
 
     const systemPrompt = `You are a content format conversion AI at GhostStudio AI. Transform content from one format to another.
+
+CONTENT DNA ALIGNMENT:
+- Voice: ${dnaVoice}
+- Emotional Texture: ${dnaTone}${forbiddenStr}
 
 Target format: ${inputTarget}
 Description: ${formatSpec.description}

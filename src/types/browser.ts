@@ -54,6 +54,7 @@ export interface BrowserSession {
   viewport: { width: number; height: number };
   status: BrowserSessionStatus;
   platform?: string;
+  userId?: string; // Owner of this session — used for authorization
   createdAt: string;
   lastActivity: string;
 }
@@ -63,6 +64,7 @@ export interface CreateSessionOptions {
   headless?: boolean;
   viewport?: { width: number; height: number };
   userAgent?: string;
+  userId?: string; // Track which user created this session
 }
 
 // ─── Browser Status ──────────────────────────────────────────────────────────

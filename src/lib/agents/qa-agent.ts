@@ -3,6 +3,36 @@
 
 import { type Agent, type AgentResult, registerAgent, type AgentType } from "./index";
 import { generateText } from "@/lib/ai";
+import { db } from "@/lib/db";
+
+interface ContentDNA {
+  coreVoice?: string;
+  sentenceRhythm?: string;
+  forbiddenPatterns?: string[];
+  emotionalTexture?: string;
+  structuralBias?: string;
+  voice?: string;
+  tone?: string;
+  audience?: string;
+  perspective?: string;
+}
+
+async function getContentDNA(workspaceId?: string): Promise<ContentDNA> {
+  if (!workspaceId) return {};
+  try {
+    const workspace = await db.workspace.findUnique({
+      where: { id: workspaceId as string },
+      select: { settingsJson: true },
+    });
+    if (workspace?.settingsJson) {
+      const settings = JSON.parse(workspace.settingsJson);
+      return settings.contentDNA || settings.dna || {};
+    }
+  } catch (error) {
+    console.error("[QAAgent] Failed to load Content DNA:", error);
+  }
+  return {};
+}
 
 async function runQAAgent(payload: Record<string, unknown>): Promise<AgentResult> {
   const { content, markdown, title, qaType, count, workspaceId } = payload;
@@ -17,6 +47,13 @@ async function runQAAgent(payload: Record<string, unknown>): Promise<AgentResult
   }
 
   try {
+    const dna = await getContentDNA(workspaceId as string | undefined);
+    const dnaAudience = dna.audience || "knowledgeable professionals";
+    const dnaPerspective = dna.perspective || "industry expert with hands-on experience";
+    const forbiddenStr = dna.forbiddenPatterns && dna.forbiddenPatterns.length > 0
+      ? `\nFORBIDDEN PATTERNS (never use): ${dna.forbiddenPatterns.join(', ')}`
+      : '';
+
     const qaSpecs: Record<string, string> = {
       faq: `Generate Frequently Asked Questions with clear, concise answers. Questions should be what a reader would naturally ask. Answers should be direct and informative.`,
       interview: `Generate interview-style Q&A pairs. Questions should be probing and thoughtful, as asked by an expert interviewer. Answers should be detailed and showcase expertise.`,
@@ -27,6 +64,10 @@ async function runQAAgent(payload: Record<string, unknown>): Promise<AgentResult
     const spec = qaSpecs[inputType.toLowerCase()] || qaSpecs.faq;
 
     const systemPrompt = `You are a Q&A generation AI at GhostStudio AI. Create high-quality question-answer pairs from content.
+
+CONTENT DNA ALIGNMENT:
+- Target Audience: ${dnaAudience}
+- Perspective: ${dnaPerspective}${forbiddenStr}
 
 ${spec}
 

@@ -3,6 +3,36 @@
 
 import { type Agent, type AgentResult, registerAgent, type AgentType } from "./index";
 import { generateText } from "@/lib/ai";
+import { db } from "@/lib/db";
+
+interface ContentDNA {
+  coreVoice?: string;
+  sentenceRhythm?: string;
+  forbiddenPatterns?: string[];
+  emotionalTexture?: string;
+  structuralBias?: string;
+  voice?: string;
+  tone?: string;
+  audience?: string;
+  perspective?: string;
+}
+
+async function getContentDNA(workspaceId?: string): Promise<ContentDNA> {
+  if (!workspaceId) return {};
+  try {
+    const workspace = await db.workspace.findUnique({
+      where: { id: workspaceId as string },
+      select: { settingsJson: true },
+    });
+    if (workspace?.settingsJson) {
+      const settings = JSON.parse(workspace.settingsJson);
+      return settings.contentDNA || settings.dna || {};
+    }
+  } catch (error) {
+    console.error("[SummaryAgent] Failed to load Content DNA:", error);
+  }
+  return {};
+}
 
 async function runSummaryAgent(payload: Record<string, unknown>): Promise<AgentResult> {
   const { content, markdown, title, summaryType, maxLength, workspaceId } = payload;
@@ -17,6 +47,13 @@ async function runSummaryAgent(payload: Record<string, unknown>): Promise<AgentR
   }
 
   try {
+    const dna = await getContentDNA(workspaceId as string | undefined);
+    const dnaVoice = dna.coreVoice || dna.voice || "professional yet approachable";
+    const dnaPerspective = dna.perspective || "industry expert with hands-on experience";
+    const forbiddenStr = dna.forbiddenPatterns && dna.forbiddenPatterns.length > 0
+      ? `\nFORBIDDEN PATTERNS (never use): ${dna.forbiddenPatterns.join(', ')}`
+      : '';
+
     const summarySpecs: Record<string, string> = {
       brief: `Create a brief summary in 1-2 sentences (max 100 words). Capture only the core message.`,
       detailed: `Create a detailed summary (max ${inputMaxLen} words). Include main arguments, key data points, and conclusions.`,
@@ -28,6 +65,10 @@ async function runSummaryAgent(payload: Record<string, unknown>): Promise<AgentR
     const spec = summarySpecs[inputType.toLowerCase()] || summarySpecs.detailed;
 
     const systemPrompt = `You are a content summarization AI at GhostStudio AI. Create precise, useful summaries.
+
+CONTENT DNA ALIGNMENT:
+- Voice: ${dnaVoice}
+- Perspective: ${dnaPerspective}${forbiddenStr}
 
 ${spec}
 

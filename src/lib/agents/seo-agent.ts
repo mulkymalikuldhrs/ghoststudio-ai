@@ -3,9 +3,39 @@
 
 import { type Agent, type AgentResult, registerAgent, type AgentType } from "./index";
 import { generateText } from "@/lib/ai";
+import { db } from "@/lib/db";
+
+interface ContentDNA {
+  coreVoice?: string;
+  sentenceRhythm?: string;
+  forbiddenPatterns?: string[];
+  emotionalTexture?: string;
+  structuralBias?: string;
+  voice?: string;
+  tone?: string;
+  audience?: string;
+  perspective?: string;
+}
+
+async function getContentDNA(workspaceId?: string): Promise<ContentDNA> {
+  if (!workspaceId) return {};
+  try {
+    const workspace = await db.workspace.findUnique({
+      where: { id: workspaceId as string },
+      select: { settingsJson: true },
+    });
+    if (workspace?.settingsJson) {
+      const settings = JSON.parse(workspace.settingsJson);
+      return settings.contentDNA || settings.dna || {};
+    }
+  } catch (error) {
+    console.error("[SeoAgent] Failed to load Content DNA:", error);
+  }
+  return {};
+}
 
 async function runSeoAgent(payload: Record<string, unknown>): Promise<AgentResult> {
-  const { content, markdown, focusKeyword } = payload;
+  const { content, markdown, focusKeyword, workspaceId } = payload;
   const inputContent = (content || markdown) as string;
   const startTime = Date.now();
 
@@ -17,7 +47,22 @@ async function runSeoAgent(payload: Record<string, unknown>): Promise<AgentResul
   }
 
   try {
+    const dna = await getContentDNA(workspaceId as string | undefined);
+    const dnaVoice = dna.coreVoice || dna.voice || "professional yet approachable";
+    const dnaTone = dna.emotionalTexture || dna.tone || "informative and engaging";
+    const dnaAudience = dna.audience || "knowledgeable professionals";
+    const dnaPerspective = dna.perspective || "industry expert with hands-on experience";
+    const forbiddenStr = dna.forbiddenPatterns && dna.forbiddenPatterns.length > 0
+      ? `\nFORBIDDEN PATTERNS (never use): ${dna.forbiddenPatterns.join(', ')}`
+      : '';
+
     const systemPrompt = `You are an SEO expert at GhostStudio AI. Your job is to generate a complete SEO optimization pack for the given content.
+
+CONTENT DNA ALIGNMENT:
+- Voice: ${dnaVoice}
+- Emotional Texture: ${dnaTone}
+- Target Audience: ${dnaAudience}
+- Perspective: ${dnaPerspective}${forbiddenStr}
 
 You must analyze the content and produce:
 1. Meta Title: 50-60 characters, compelling, includes primary keyword

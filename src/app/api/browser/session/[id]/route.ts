@@ -4,15 +4,22 @@ import { authOptions } from "@/lib/auth";
 import { browserManager } from "@/lib/browser/browser-manager";
 import { livePreview } from "@/lib/browser/live-preview";
 
+// Helper: Get authenticated user ID or return 401
+async function getAuthUserId(request: NextRequest): Promise<string | null> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return null;
+  // Use the user ID from the JWT token if available
+  return (session.user as { id?: string })?.id || session.user.email;
+}
+
 // GET /api/browser/session/[id] — Get session status
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const userId = await getAuthUserId(_request);
+    if (!userId) {
       return NextResponse.json(
         { error: "Not authenticated" },
         { status: 401 }
@@ -20,6 +27,15 @@ export async function GET(
     }
 
     const { id } = await params;
+
+    // Verify session ownership
+    if (!browserManager.isSessionOwner(id, userId)) {
+      return NextResponse.json(
+        { error: "Forbidden: You do not own this session" },
+        { status: 403 }
+      );
+    }
+
     const sessionStatus = await browserManager.getSessionStatus(id);
 
     if (!sessionStatus) {
@@ -55,9 +71,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const userId = await getAuthUserId(_request);
+    if (!userId) {
       return NextResponse.json(
         { error: "Not authenticated" },
         { status: 401 }
@@ -65,6 +80,14 @@ export async function DELETE(
     }
 
     const { id } = await params;
+
+    // Verify session ownership
+    if (!browserManager.isSessionOwner(id, userId)) {
+      return NextResponse.json(
+        { error: "Forbidden: You do not own this session" },
+        { status: 403 }
+      );
+    }
 
     // Stop streaming if active
     if (livePreview.isStreaming(id)) {

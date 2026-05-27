@@ -29,6 +29,13 @@ THE 10 HUMANIC RULES — Apply ALL of these when rewriting:
 10. REMOVE HEDGING LANGUAGE: Delete "arguably", "potentially", "it could be said", "one might consider". Replace with direct assertions or skip entirely.`;
 
 interface ContentDNA {
+  // Core DNA fields
+  coreVoice?: string;
+  sentenceRhythm?: string;
+  forbiddenPatterns?: string[];
+  emotionalTexture?: string;
+  structuralBias?: string;
+  // Legacy/shorthand fields
   voice?: string;
   tone?: string;
   audience?: string;
@@ -67,15 +74,26 @@ async function runHumanicAgent(payload: Record<string, unknown>): Promise<AgentR
   try {
     const dna = await getContentDNA(workspaceId as string | undefined);
 
+    // Build DNA injection with full core DNA support
+    const dnaVoice = dna.coreVoice || dna.voice || "professional yet approachable";
+    const dnaTone = dna.emotionalTexture || dna.tone || "informative and engaging";
+    const dnaAudience = dna.audience || "knowledgeable professionals";
+    const dnaPerspective = dna.perspective || "industry expert with hands-on experience";
+    const forbiddenStr = dna.forbiddenPatterns && dna.forbiddenPatterns.length > 0
+      ? `\nFORBIDDEN PATTERNS (never use these): ${dna.forbiddenPatterns.join(', ')}`
+      : '';
+    const rhythmStr = dna.sentenceRhythm ? `\nSentence Rhythm: ${dna.sentenceRhythm}` : '';
+    const biasStr = dna.structuralBias ? `\nStructural Bias: ${dna.structuralBias}` : '';
+
     const systemPrompt = `You are a humanization expert at GhostStudio AI. Your job is to rewrite AI-generated content so it reads like a real expert wrote it — someone with opinions, personality, and experience.
 
 ${HUMANIC_RULES}
 
 CONTENT DNA ALIGNMENT:
-- Voice: ${dna.voice || "professional yet approachable"}
-- Tone: ${dna.tone || "informative and engaging"}
-- Target Audience: ${dna.audience || "knowledgeable professionals"}
-- Perspective: ${dna.perspective || "industry expert with hands-on experience"}
+- Voice: ${dnaVoice}
+- Emotional Texture: ${dnaTone}
+- Target Audience: ${dnaAudience}
+- Perspective: ${dnaPerspective}${rhythmStr}${biasStr}${forbiddenStr}
 
 CRITICAL: Preserve ALL factual information, data points, and key arguments. Only change HOW things are expressed, not WHAT is being said. The meaning must remain identical.
 

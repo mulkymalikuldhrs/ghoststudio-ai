@@ -3,6 +3,36 @@
 
 import { type Agent, type AgentResult, registerAgent, type AgentType } from "./index";
 import { generateText } from "@/lib/ai";
+import { db } from "@/lib/db";
+
+interface ContentDNA {
+  coreVoice?: string;
+  sentenceRhythm?: string;
+  forbiddenPatterns?: string[];
+  emotionalTexture?: string;
+  structuralBias?: string;
+  voice?: string;
+  tone?: string;
+  audience?: string;
+  perspective?: string;
+}
+
+async function getContentDNA(workspaceId?: string): Promise<ContentDNA> {
+  if (!workspaceId) return {};
+  try {
+    const workspace = await db.workspace.findUnique({
+      where: { id: workspaceId as string },
+      select: { settingsJson: true },
+    });
+    if (workspace?.settingsJson) {
+      const settings = JSON.parse(workspace.settingsJson);
+      return settings.contentDNA || settings.dna || {};
+    }
+  } catch (error) {
+    console.error("[RepurposeAgent] Failed to load Content DNA:", error);
+  }
+  return {};
+}
 
 const PLATFORM_SPECS: Record<string, { maxLength: number; tone: string; format: string; tips: string }> = {
   twitter: {
@@ -67,6 +97,15 @@ async function runRepurposeAgent(payload: Record<string, unknown>): Promise<Agen
   const targetPlatforms = (platforms as string[]) || ["twitter", "linkedin", "instagram", "newsletter"];
 
   try {
+    const dna = await getContentDNA(workspaceId as string | undefined);
+    const dnaVoice = dna.coreVoice || dna.voice || "professional yet approachable";
+    const dnaTone = dna.emotionalTexture || dna.tone || "informative and engaging";
+    const dnaAudience = dna.audience || "knowledgeable professionals";
+    const dnaPerspective = dna.perspective || "industry expert with hands-on experience";
+    const forbiddenStr = dna.forbiddenPatterns && dna.forbiddenPatterns.length > 0
+      ? `\nFORBIDDEN PATTERNS (never use): ${dna.forbiddenPatterns.join(', ')}`
+      : '';
+
     const platformSpecs = targetPlatforms
       .filter((p) => PLATFORM_SPECS[p.toLowerCase()])
       .map((p) => {
@@ -76,6 +115,12 @@ async function runRepurposeAgent(payload: Record<string, unknown>): Promise<Agen
       .join("\n\n");
 
     const systemPrompt = `You are a content repurposing expert at GhostStudio AI. Your job is to adapt a master piece of content for different platforms while preserving the core message.
+
+CONTENT DNA ALIGNMENT:
+- Voice: ${dnaVoice}
+- Emotional Texture: ${dnaTone}
+- Target Audience: ${dnaAudience}
+- Perspective: ${dnaPerspective}${forbiddenStr}
 
 Each platform has specific requirements:
 
@@ -87,6 +132,7 @@ Rules:
 3. Add platform-specific elements (hashtags, CTAs, formatting)
 4. Make each variant feel native to its platform — not like a copy-paste
 5. Include metadata for each variant (character count, estimated engagement potential)
+6. Ensure all variants reflect the Content DNA voice and emotional texture above
 
 Return ONLY valid JSON:
 {

@@ -6,6 +6,13 @@ import { generateText } from "@/lib/ai";
 import { db } from "@/lib/db";
 
 interface ContentDNA {
+  // Core DNA fields
+  coreVoice?: string;
+  sentenceRhythm?: string;
+  forbiddenPatterns?: string[];
+  emotionalTexture?: string;
+  structuralBias?: string;
+  // Legacy/shorthand fields (also supported)
   voice?: string;
   tone?: string;
   audience?: string;
@@ -64,27 +71,38 @@ async function runDraftAgent(payload: Record<string, unknown>): Promise<AgentRes
     const dna = await getContentDNA(workspaceId as string | undefined);
     const memoryContext = await getMemoryContext(workspaceId as string | undefined);
 
+    // Build DNA injection with full core DNA support
+    const dnaVoice = dna.coreVoice || dna.voice || "professional yet approachable";
+    const dnaTone = dna.emotionalTexture || dna.tone || tone || "informative and engaging";
+    const dnaAudience = dna.audience || "knowledgeable professionals";
+    const dnaPerspective = dna.perspective || "industry expert with hands-on experience";
+    const forbiddenStr = dna.forbiddenPatterns && dna.forbiddenPatterns.length > 0
+      ? `\nFORBIDDEN PATTERNS (never use these phrases): ${dna.forbiddenPatterns.join(', ')}`
+      : '';
+    const rhythmStr = dna.sentenceRhythm ? `\nSentence Rhythm: ${dna.sentenceRhythm}` : '';
+    const biasStr = dna.structuralBias ? `\nStructural Bias: ${dna.structuralBias}` : '';
+
     const systemPrompt = `You are an expert content writer and part of GhostStudio AI's content engine.
 
 CONTENT DNA (your writing identity):
-- Voice: ${dna.voice || "professional yet approachable"}
-- Tone: ${dna.tone || tone || "informative and engaging"}
-- Target Audience: ${dna.audience || "knowledgeable professionals"}
-- Perspective: ${dna.perspective || "industry expert with hands-on experience"}
+- Voice: ${dnaVoice}
+- Emotional Texture: ${dnaTone}
+- Target Audience: ${dnaAudience}
+- Perspective: ${dnaPerspective}${rhythmStr}${biasStr}${forbiddenStr}
 
 ${memoryContext ? `MEMORY CONTEXT (learn what works):\n${memoryContext}` : ""}
 
 Your job is to generate a COMPLETE, publication-ready article draft in markdown format.
 Rules:
-1. Write with the voice and tone defined above — be authentic, not generic
+1. Write with the voice and emotional texture defined above — be authentic, not generic
 2. Open with a hook that grabs attention in the first sentence
 3. Use concrete examples, data points, and specific details — avoid vague statements
 4. Structure with clear H2 and H3 headings for scannability
 5. Include a compelling conclusion with a clear takeaway or call-to-action
 6. Target approximately ${targetLength || 1500} words
-7. Do NOT use AI-typical phrases like "in conclusion", "it goes without saying", "delve into", "moreover", "furthermore"
-8. Write as if YOU are the expert sharing hard-won insights, not a summarizer
-9. Format: return markdown with the title as H1, then body content`;
+7. Do NOT use AI-typical phrases like "in conclusion", "it goes without saying", "delve into", "moreover", "furthermore"${dna.forbiddenPatterns?.length ? '\n8. NEVER use any of the FORBIDDEN PATTERNS listed above' : '\n8. Avoid generic AI patterns'}
+9. Write as if YOU are the expert sharing hard-won insights, not a summarizer
+10. Format: return markdown with the title as H1, then body content`;
 
     const userPrompt = `Write a full article draft on the following:
 

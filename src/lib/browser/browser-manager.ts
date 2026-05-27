@@ -16,6 +16,7 @@ interface SessionEntry {
   session: BrowserSession;
   lastActivity: Date;
   createdAt: Date;
+  userId?: string; // Track which user created this session
 }
 
 class BrowserManager {
@@ -98,6 +99,7 @@ class BrowserManager {
       viewport,
       status: "connected",
       platform: options.platform,
+      userId: options.userId,
       createdAt: now.toISOString(),
       lastActivity: now.toISOString(),
     };
@@ -109,6 +111,7 @@ class BrowserManager {
       session,
       lastActivity: now,
       createdAt: now,
+      userId: options.userId,
     };
 
     this.sessions.set(id, entry);
@@ -299,6 +302,17 @@ class BrowserManager {
    */
   hasSession(id: string): boolean {
     return this.sessions.has(id);
+  }
+
+  /**
+   * Check if a session belongs to a specific user
+   */
+  isSessionOwner(sessionId: string, userId: string): boolean {
+    const entry = this.sessions.get(sessionId);
+    if (!entry) return false;
+    // If no userId was set on session (legacy), allow access
+    if (!entry.userId) return true;
+    return entry.userId === userId;
   }
 
   /**
