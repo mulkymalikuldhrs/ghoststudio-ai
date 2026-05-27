@@ -15,19 +15,32 @@ const IV_LENGTH = 16
 const TAG_LENGTH = 16
 const KEY_LENGTH = 32
 
+/**
+ * Resolve the encryption salt from the ENCRYPTION_SALT environment variable.
+ * Backward-compatible: if ENCRYPTION_SALT is not set, falls back to the
+ * previously hardcoded value 'ghoststudio-salt' so existing encrypted data
+ * remains decryptable. In production, always set ENCRYPTION_SALT to a
+ * unique, cryptographically random value.
+ */
+function getEncryptionSalt(): string {
+  return process.env.ENCRYPTION_SALT || 'ghoststudio-salt'
+}
+
 function getEncryptionKey(): Buffer {
   const secret = process.env.ENCRYPTION_KEY
+  const salt = getEncryptionSalt()
+
   if (!secret) {
     // In development, use a derived key from NEXTAUTH_SECRET as fallback
     const fallback = process.env.NEXTAUTH_SECRET || 'dev-only-fallback-key-do-not-use-in-prod'
-    return scryptSync(fallback, 'ghoststudio-salt', KEY_LENGTH)
+    return scryptSync(fallback, salt, KEY_LENGTH)
   }
   // If the key is a hex string, use it directly
   if (secret.length === 64 && /^[0-9a-f]+$/i.test(secret)) {
     return Buffer.from(secret, 'hex')
   }
   // Otherwise derive a key from the secret
-  return scryptSync(secret, 'ghoststudio-salt', KEY_LENGTH)
+  return scryptSync(secret, salt, KEY_LENGTH)
 }
 
 /**
