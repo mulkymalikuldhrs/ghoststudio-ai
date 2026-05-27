@@ -1,8 +1,8 @@
 {
-  "name": "ai-media-intelligence-os",
-  "version": "0.1.0",
+  "name": "ghoststudio-ai",
+  "version": "2.0.0",
   "private": true,
-  "description": "AI Media Intelligence OS — Autonomous Media Operating System. Authority Compounding Engine. Memory-Driven Publishing Infrastructure.",
+  "description": "GhostStudio AI — The Autonomous Media Operating System. 24+ AI Agents, True Loop Pipeline, Content DNA Engine, Video Generation, Heatmap Analytics, Browser Automation, Financial Management. Merged from GhostStudio AI + AI Media Intelligence OS.",
   "author": "Mulky Malikul Dhaher <mulkymalikuldhaher@email.com>",
   "license": "MIT",
   "scripts": {
@@ -16,8 +16,10 @@
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
     "db:seed": "bun prisma/seed.ts",
-    "docker:build": "docker build -t ai-media-os .",
-    "docker:run": "docker run -p 3000:3000 --env-file .env ai-media-os"
+    "docker:build": "docker build -t ghoststudio-ai .",
+    "docker:run": "docker run -p 3000:3000 --env-file .env ghoststudio-ai",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",

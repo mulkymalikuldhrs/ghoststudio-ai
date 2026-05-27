@@ -17,9 +17,15 @@ services:
       - .env
     environment:
       - NODE_ENV=production
+      - HEATMAP_CLIPPER_URL=http://heatmap-clipper:5000
+      - PIXELLE_VIDEO_URL=http://pixelle-video:8000
     depends_on:
       db:
         condition: service_healthy
+      heatmap-clipper:
+        condition: service_started
+      pixelle-video:
+        condition: service_started
     restart: unless-stopped
     networks:
       - ghoststudio
@@ -47,11 +53,64 @@ services:
     networks:
       - ghoststudio
 
+  # ---------------------------------------------------------------------------
+  # YouTube Heatmap Clipper — Python Engine (Flask)
+  # Scrapes YouTube heatmap data, downloads clips, generates subtitles
+  # ---------------------------------------------------------------------------
+  heatmap-clipper:
+    build:
+      context: ./python-engines/heatmap-clipper
+      dockerfile: Dockerfile
+    container_name: ghoststudio-heatmap-clipper
+    ports:
+      - "5001:5000"
+    volumes:
+      - clipper-output:/app/clips
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - ghoststudio
+
+  # ---------------------------------------------------------------------------
+  # Pixelle Video — Python Engine (FastAPI)
+  # AI video generation: LLM → TTS → ComfyUI images → FFmpeg composition
+  # ---------------------------------------------------------------------------
+  pixelle-video:
+    build:
+      context: ./python-engines/pixelle-video
+      dockerfile: Dockerfile
+    container_name: ghoststudio-pixelle-video
+    ports:
+      - "8000:8000"
+    volumes:
+      - pixelle-output:/app/output
+      - ./pixelle-config.yaml:/app/config.yaml:ro
+    environment:
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - ghoststudio
+
 # ---------------------------------------------------------------------------
 # Named Volumes
 # ---------------------------------------------------------------------------
 volumes:
   pgdata:
+    driver: local
+  clipper-output:
+    driver: local
+  pixelle-output:
     driver: local
 
 # ---------------------------------------------------------------------------

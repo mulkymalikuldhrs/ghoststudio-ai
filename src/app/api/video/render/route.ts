@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 // POST /api/video/render - Start a render job
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { projectId, jobType = "full", configJson = {} } = body;
 
@@ -23,6 +30,11 @@ export async function POST(request: NextRequest) {
         { error: "Video project not found" },
         { status: 404 }
       );
+    }
+
+    // Verify ownership
+    if (project.userId !== session.user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const renderJob = await db.videoRenderJob.create({

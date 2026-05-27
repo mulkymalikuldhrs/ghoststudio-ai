@@ -1,6 +1,8 @@
 // AI helper — uses z-ai-web-dev-sdk for LLM calls
 // This is used by the backend only
 
+export const SYSTEM_PROMPT = `You are GhostStudio AI, an intelligent media operating system assistant. You help users manage their content creation, video production, financial planning, and workspace operations. You provide strategic, actionable advice based on the workspace context. Always be helpful, precise, and proactive.`;
+
 interface AIGenerateOptions {
   prompt: string;
   system?: string;
@@ -62,6 +64,29 @@ export async function generateJSON<T>(options: AIGenerateOptions): Promise<T> {
     return JSON.parse(result.text) as T;
   } catch {
     throw new Error("AI returned invalid JSON");
+  }
+}
+
+/**
+ * Chat-style AI completion — takes an array of messages and returns a response
+ * Used by the AI workspace routes (agent-run, chat, analyze, etc.)
+ */
+export async function aiChat(
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  options?: { temperature?: number; maxTokens?: number }
+): Promise<string> {
+  try {
+    const ZAI = (await import("z-ai-web-dev-sdk")).default;
+    const zai = await ZAI.create();
+    const response = await zai.chat.completions.create({
+      messages,
+      temperature: options?.temperature ?? 0.7,
+      max_tokens: options?.maxTokens ?? 2000,
+    });
+    return response.choices?.[0]?.message?.content || "";
+  } catch (error) {
+    console.error("AI chat error:", error);
+    throw new Error("AI chat failed");
   }
 }
 

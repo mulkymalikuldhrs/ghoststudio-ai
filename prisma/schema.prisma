@@ -28,6 +28,9 @@ model User {
   apiCredentials    ApiCredential[]
   subscriptions     Subscription[]
   videoProjects     VideoProject[]
+  workspaceMembers  WorkspaceMember[]
+  heatmapClipJobs   HeatmapClipJob[]
+  tikTokCampaigns   TikTokCampaign[]
 
   @@index([email])
   @@index([stripeCustomerId])
@@ -39,7 +42,11 @@ model Workspace {
   slug            String           @unique
   description     String?
   ownerId         String
+  type            String           @default("personal") // personal, family, team, agency
+  autonomousLevel Int              @default(3) // 1-5: how much AI can decide autonomously
   settingsJson    String           @default("{}") // DNA config, scheduling preferences, etc.
+  trialStart      DateTime?
+  trialEnd        DateTime?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   owner           User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -49,9 +56,21 @@ model Workspace {
   analyticsEvents AnalyticsEvent[]
   publishJobs     PublishJob[]
   apiCredentials  ApiCredential[]
+  members         WorkspaceMember[]
+  tasks           Task[]
+  accounts        FinanceAccount[]
+  transactions    Transaction[]
+  budgetRules     BudgetRule[]
+  financialGoals  FinancialGoal[]
+  vaultDocuments  VaultDocument[]
+  memories        Memory[]
+  suggestions     Suggestion[]
+  agentLogs       AgentLog[]
+  energyEntries   EnergyEntry[]
 
   @@index([ownerId])
   @@index([slug])
+  @@index([type])
 }
 
 // ============================================================
@@ -349,15 +368,16 @@ model SystemLog {
 // ============================================================
 
 model EnergyEntry {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   workspaceId  String
   category     String // topic_fatigue, tone_fatigue, publish_saturation, audience_exhaustion, hook_repetition
   topic        String? // The topic/tone/hook being tracked
-  fatigueScore Float    @default(0) // 0 (fresh) to 100 (exhausted)
-  publishCount Int      @default(0) // Number of recent publications in this category
-  lastResetAt  DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  fatigueScore Float     @default(0) // 0 (fresh) to 100 (exhausted)
+  publishCount Int       @default(0) // Number of recent publications in this category
+  lastResetAt  DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
   @@index([category])
@@ -518,6 +538,7 @@ model HeatmapClipJob {
   metadataJson   String   @default("{}")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([status])
@@ -549,9 +570,248 @@ model TikTokCampaign {
   metricsJson    String    @default("{}") // JSON: campaign metrics
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([workspaceId])
   @@index([status])
   @@index([campaignType])
+}
+
+// ============================================================
+// WORKSPACE MEMBER — Multi-user workspace collaboration
+// ============================================================
+
+model WorkspaceMember {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  userId          String
+  role            String    @default("member") // owner, admin, member, viewer
+  alias           String?
+  authorityLevel  Int       @default(1) // 1-5: decision-making authority
+  energyLevel     Int       @default(80) // 0-100: current energy/stamina
+  stressLevel     Int       @default(20) // 0-100: current stress level
+  constraints     String?   // JSON: time/availability constraints
+  preferences     String?   // JSON: working preferences
+  visibilityScope String?   // JSON: what data this member can see
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([role])
+}
+
+// ============================================================
+// TASK — Workspace task management with cost tracking
+// ============================================================
+
+model Task {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  title             String
+  description       String?
+  status            String    @default("todo") // todo, in_progress, done, blocked, cancelled
+  timeCost          Int       @default(0) // estimated minutes
+  energyCost        Int       @default(0) // 1-10
+  moneyCost         Float     @default(0) // estimated cost in dollars
+  priority          String    @default("medium") // low, medium, high, critical
+  assignedTo        String?   // userId of assigned member
+  dependencies      String?   // JSON: array of task IDs this depends on
+  dueDate           DateTime?
+  completedAt       DateTime?
+  aiRejected        Boolean   @default(false)
+  aiRejectionReason String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedTo])
+  @@index([dueDate])
+}
+
+// ============================================================
+// FINANCE ACCOUNT — Financial accounts per workspace
+// ============================================================
+
+model FinanceAccount {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  type        String    @default("checking") // checking, savings, investment, cash, credit
+  balance     Float     @default(0)
+  currency    String    @default("USD")
+  isEmergency Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([workspaceId])
+  @@index([type])
+}
+
+// ============================================================
+// TRANSACTION — Income and expense tracking
+// ============================================================
+
+model Transaction {
+  id           String         @id @default(cuid())
+  workspaceId  String
+  accountId    String?
+  amount       Float          @default(0)
+  category     String         @default("other") // salary, freelance, investment, food, transport, housing, entertainment, utilities, other
+  type         String         @default("expense") // income, expense, transfer
+  description  String?
+  date         DateTime       @default(now())
+  isRecurring  Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account      FinanceAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([accountId])
+  @@index([category])
+  @@index([type])
+  @@index([date])
+}
+
+// ============================================================
+// BUDGET RULE — Spending limits per category
+// ============================================================
+
+model BudgetRule {
+  id          String    @id @default(cuid())
+  workspaceId String
+  category    String
+  limitAmount Float     @default(0)
+  period      String    @default("monthly") // weekly, monthly, yearly
+  priority    String    @default("medium") // low, medium, high
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([category])
+  @@index([isActive])
+}
+
+// ============================================================
+// FINANCIAL GOAL — Savings and target tracking
+// ============================================================
+
+model FinancialGoal {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  name          String
+  targetAmount  Float     @default(0)
+  currentAmount Float     @default(0)
+  deadline      DateTime?
+  priority      String    @default("medium") // low, medium, high
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([deadline])
+}
+
+// ============================================================
+// VAULT DOCUMENT — Secure document storage
+// ============================================================
+
+model VaultDocument {
+  id          String    @id @default(cuid())
+  workspaceId String
+  title       String
+  type        String    @default("note") // note, contract, receipt, policy, plan, report
+  content     String?   // Document content (markdown/text)
+  priority    String    @default("medium") // low, medium, high, critical
+  scope       String    @default("workspace") // workspace, personal, shared
+  visibility  String?   // JSON: who can see this
+  tags        String?   // JSON: array of tags
+  metadata    String?   // JSON: additional metadata
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([type])
+  @@index([scope])
+}
+
+// ============================================================
+// MEMORY — Workspace-level memory with layered storage
+// (Separate from MemoryEntry which is for content intelligence)
+// ============================================================
+
+model Memory {
+  id          String    @id @default(cuid())
+  workspaceId String
+  layer       String    @default("short_term") // short_term, long_term, decision, procedural
+  category    String?   // agent_planner, agent_finance, chat, suggestion_response, etc.
+  content     String    // The memory content
+  importance  Int       @default(5) // 1-10
+  expiresAt   DateTime? // Optional expiration for short-term memories
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([layer])
+  @@index([category])
+  @@index([importance])
+  @@index([expiresAt])
+}
+
+// ============================================================
+// SUGGESTION — AI-generated proactive suggestions
+// ============================================================
+
+model Suggestion {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  type         String    @default("preventive") // preventive, corrective, strategic, behavioral
+  agentSource  String?   // Which agent created this suggestion
+  title        String
+  reason       String?   // Why this suggestion was made
+  consequence  String?   // What happens if accepted/ignored
+  actionData   String?   // JSON: actionable data for implementation
+  status       String    @default("pending") // pending, accepted, simulated, ignored
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([type])
+  @@index([status])
+  @@index([agentSource])
+}
+
+// ============================================================
+// AGENT LOG — Track AI agent decisions and reasoning
+// ============================================================
+
+model AgentLog {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  agentType       String    // planner, finance, mediator, health, education, memory, executive
+  action          String    // What the agent did
+  result          String?   // JSON: agent result/output
+  reasoning       String?   // Why the agent decided this
+  autonomousLevel Int       @default(3)
+  createdAt       DateTime  @default(now())
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([agentType])
+  @@index([createdAt])
 }

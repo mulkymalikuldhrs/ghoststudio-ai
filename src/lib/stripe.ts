@@ -74,3 +74,6 @@ export const PLAN_CONFIG = {
 } as const;
 
 export type PlanType = keyof typeof PLAN_CONFIG;
+
+// Backward compat alias used by settings page
+export const STRIPE_PLANS = PLAN_CONFIG;

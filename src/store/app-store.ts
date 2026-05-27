@@ -50,6 +50,10 @@ interface AppStore {
   clearNotifications: () => void;
   unreadCount: () => number;
 
+  // ── Sidebar ────────────────────────────────────────────────────────────
+  sidebarOpen: boolean;
+  toggleSidebar: () => void;
+
   // ── Command Palette ─────────────────────────────────────────────────────
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
@@ -128,6 +132,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })),
   clearNotifications: () => set({ notifications: [] }),
   unreadCount: () => get().notifications.filter((n) => !n.read).length,
+
+  // ── Sidebar ────────────────────────────────────────────────────────────
+  sidebarOpen: true,
+  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
 
   // ── Command Palette ─────────────────────────────────────────────────────
   commandPaletteOpen: false,

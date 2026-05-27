@@ -93,6 +93,13 @@ const JOB_AGENT_MAP: Record<string, string> = {
 // ─── Content DNA & Memory Context ───────────────────────────────────────────
 
 export interface ContentDNA {
+  // Core DNA fields (stored in workspace.settingsJson.dna)
+  coreVoice?: string;         // e.g. "Direct, grounded, authoritative"
+  sentenceRhythm?: string;    // e.g. "varied"
+  forbiddenPatterns?: string[]; // e.g. ["In conclusion", "It goes without saying"]
+  emotionalTexture?: string;  // e.g. "confident but approachable"
+  structuralBias?: string;   // e.g. "actionable insights over theory"
+  // Legacy/shorthand fields (also supported)
   voice?: string;
   tone?: string;
   audience?: string;
@@ -175,8 +182,14 @@ export async function getMemoryContext(workspaceId?: string): Promise<MemoryCont
  */
 export function buildDNAInjection(dna: ContentDNA): string {
   const parts: string[] = [];
-  if (dna.voice) parts.push(`Voice: ${dna.voice}`);
-  if (dna.tone) parts.push(`Tone: ${dna.tone}`);
+  // Support both core DNA fields and legacy shorthand fields
+  if (dna.coreVoice || dna.voice) parts.push(`Voice: ${dna.coreVoice || dna.voice}`);
+  if (dna.sentenceRhythm) parts.push(`Sentence Rhythm: ${dna.sentenceRhythm}`);
+  if (dna.forbiddenPatterns && dna.forbiddenPatterns.length > 0) {
+    parts.push(`FORBIDDEN PATTERNS (never use): ${dna.forbiddenPatterns.join(', ')}`);
+  }
+  if (dna.emotionalTexture || dna.tone) parts.push(`Emotional Texture: ${dna.emotionalTexture || dna.tone}`);
+  if (dna.structuralBias) parts.push(`Structural Bias: ${dna.structuralBias}`);
   if (dna.audience) parts.push(`Target Audience: ${dna.audience}`);
   if (dna.perspective) parts.push(`Perspective: ${dna.perspective}`);
   return parts.length > 0

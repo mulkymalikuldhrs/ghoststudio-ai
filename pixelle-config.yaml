@@ -1,0 +1,26 @@
+# Pixelle Video Configuration for GhostStudio AI
+# See python-engines/pixelle-video/config.example.yaml for full options
+
+llm:
+  api_key: ${LLM_API_KEY}
+  base_url: ${LLM_BASE_URL:-https://api.openai.com/v1}
+  model: ${LLM_MODEL:-gpt-4o}
+
+comfyui:
+  comfyui_url: ${COMFYUI_URL:-http://127.0.0.1:8188}
+  comfyui_api_key: ${COMFYUI_API_KEY:-}
+  runninghub_api_key: ${RUNNINGHUB_API_KEY:-}
+  runninghub_concurrent_limit: ${RUNNINGHUB_CONCURRENT_LIMIT:-3}
+
+  tts:
+    default_workflow: edge_tts
+  image:
+    default_workflow: ${COMFYUI_IMAGE_WORKFLOW:-default}
+  video:
+    default_workflow: ${COMFYUI_VIDEO_WORKFLOW:-default}
+
+template:
+  default_template: ${DEFAULT_TEMPLATE:-minimal}
+
+output:
+  dir: /app/output

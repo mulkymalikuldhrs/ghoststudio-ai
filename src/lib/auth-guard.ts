@@ -49,12 +49,12 @@ export async function requireAuth(
 }
 
 /**
- * requireWorkspaceAccess — Verifies that the authenticated user owns the specified workspace.
+ * requireWorkspaceAccess — Verifies that the authenticated user owns or is a member of the specified workspace.
  * Returns the workspace data if access is granted, otherwise throws 403.
  *
  * @param request - The incoming NextRequest
  * @param workspaceId - The workspace ID to check access for
- * @returns The workspace object from the database
+ * @returns The workspace object from the database and auth session
  * @throws NextResponse with 401 if not authenticated, 403 if no access, 404 if not found
  */
 export async function requireWorkspaceAccess(
@@ -77,14 +77,23 @@ export async function requireWorkspaceAccess(
   }
 
   // Check if the user is the owner
-  if (workspace.ownerId !== auth.userId) {
+  if (workspace.ownerId === auth.userId) {
+    return { auth, workspace };
+  }
+
+  // Check if the user is a workspace member
+  const membership = await db.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId, userId: auth.userId } },
+  });
+
+  if (!membership) {
     throw NextResponse.json(
       { error: "You do not have access to this workspace", code: "FORBIDDEN" },
       { status: 403 }
     );
   }
 
-  return { auth, workspace };
+  return { auth, workspace, membership };
 }
 
 /**

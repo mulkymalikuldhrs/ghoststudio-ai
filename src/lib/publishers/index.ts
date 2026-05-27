@@ -2,6 +2,7 @@
 // WordPress, Medium, Blogger, Substack, Beehiiv, Dev.to, Hashnode, Ghost, Mirror
 
 import { db } from "@/lib/db";
+import { decrypt, isEncrypted } from "@/lib/crypto";
 
 export type Platform =
   | "wordpress"
@@ -71,10 +72,17 @@ export async function getCredentials(
 
   if (!credential) return null;
 
-  // In production, decrypt the token
+  // Decrypt the token if it's encrypted, otherwise use as-is (legacy support)
+  const token = isEncrypted(credential.encryptedToken)
+    ? decrypt(credential.encryptedToken)
+    : credential.encryptedToken;
+  const refreshToken = credential.refreshToken
+    ? (isEncrypted(credential.refreshToken) ? decrypt(credential.refreshToken) : credential.refreshToken)
+    : "";
+
   return {
-    token: credential.encryptedToken,
-    refreshToken: credential.refreshToken || "",
+    token,
+    refreshToken,
     endpointUrl: credential.endpointUrl || "",
   };
 }

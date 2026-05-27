@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 
 // Rate limiting store (in-memory, per-instance)
+// NOTE: For production, replace with Redis-based rate limiting
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
@@ -9,12 +11,13 @@ const RATE_LIMIT_MAX = {
   api: 60,       // 60 requests per minute for API
   auth: 10,      // 10 requests per minute for auth
   generate: 5,   // 5 requests per minute for AI generation
+  ai: 10,        // 10 requests per minute for AI agent routes
 };
 
 function getRateLimitKey(request: NextRequest): string {
   // Use IP address or fallback to a default
   const forwarded = request.headers.get("x-forwarded-for");
-  const ip = forwarded ? forwarded.split(",")[0] : "unknown";
+  const ip = forwarded ? forwarded.split(",")[0].trim() : "unknown";
   return ip;
 }
 
@@ -48,7 +51,7 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000); // Every 5 minutes
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Skip middleware for static files and Next.js internals
@@ -68,8 +71,10 @@ export function middleware(request: NextRequest) {
     let maxRequests = RATE_LIMIT_MAX.api;
     if (pathname.startsWith("/api/auth/")) {
       maxRequests = RATE_LIMIT_MAX.auth;
-    } else if (pathname.includes("/generate") || pathname.includes("/ai/")) {
+    } else if (pathname.includes("/generate")) {
       maxRequests = RATE_LIMIT_MAX.generate;
+    } else if (pathname.startsWith("/api/ai/")) {
+      maxRequests = RATE_LIMIT_MAX.ai;
     }
 
     const { allowed, remaining } = checkRateLimit(key, maxRequests);
@@ -92,11 +97,17 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // Protect dashboard routes - redirect to signin if not authenticated
-  if (pathname.startsWith("/dashboard")) {
-    // Note: In middleware, we can't easily check NextAuth session
-    // The client-side will handle auth redirects
-    // API routes are protected via getServerSession in each handler
+  // Protect authenticated pages - check JWT token
+  if (pathname.startsWith("/os") || pathname.startsWith("/dashboard")) {
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+    
+    if (!token) {
+      // Redirect to signin with callback URL
+      const signInUrl = new URL("/auth/signin", request.url);
+      signInUrl.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(signInUrl);
+    }
+
     return NextResponse.next();
   }
 
@@ -107,5 +118,6 @@ export const config = {
   matcher: [
     "/api/:path*",
     "/dashboard/:path*",
+    "/os/:path*",
   ],
 };

@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 // POST /api/projects/generate-script - Generate a script for a video project
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { projectId, prompt, niche, style, language = "en" } = body;
 
@@ -25,6 +32,11 @@ export async function POST(request: NextRequest) {
           { error: "Project not found" },
           { status: 404 }
         );
+      }
+
+      // Verify ownership
+      if (project.userId !== session.user.id) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
 
