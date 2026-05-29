@@ -1,22 +1,14 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth-guard";
 import { db } from "@/lib/db";
 
 // GET /api/user - Get current user profile
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuth(request);
 
     const user = await db.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: auth.userId },
       include: {
         workspaces: {
           include: {
@@ -65,6 +57,7 @@ export async function GET() {
       },
     });
   } catch (error) {
+    if (error instanceof NextResponse) return error;
     console.error("User get error:", error);
     return NextResponse.json(
       { error: "Failed to fetch user profile" },

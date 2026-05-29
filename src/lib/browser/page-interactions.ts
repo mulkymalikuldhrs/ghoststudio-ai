@@ -93,8 +93,14 @@ export async function type(
     await page.waitForSelector(selector, { timeout });
 
     if (options.clear) {
-      await page.click(selector, { });
-      await page.keyboard.press("Backspace");
+      // Use $eval to truly clear the field value instead of pressing Backspace once
+      await page.$eval(selector, (el: any) => {
+        el.value = '';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      // Re-focus the element after clearing
+      await page.click(selector);
     }
 
     await page.type(selector, text, { delay: options.delay || 50 });
@@ -384,6 +390,43 @@ export async function refresh(sessionId: string): Promise<InteractionResult> {
 }
 
 /**
+ * Upload a file to a file input element
+ */
+export async function upload(
+  sessionId: string,
+  selector: string,
+  filePath: string,
+  options: { timeout?: number } = {}
+): Promise<InteractionResult> {
+  try {
+    const page = browserManager.getPage(sessionId);
+    const timeout = options.timeout || 10000;
+
+    await page.waitForSelector(selector, { timeout });
+    const element = await page.$(selector);
+
+    if (!element) {
+      return makeResult(false, "upload", {
+        selector,
+        error: `Element not found: ${selector}`,
+      });
+    }
+
+    await (element as import('puppeteer').ElementHandle<HTMLInputElement>).uploadFile(filePath);
+
+    return makeResult(true, "upload", {
+      selector,
+      value: filePath,
+    });
+  } catch (error) {
+    return makeResult(false, "upload", {
+      selector,
+      error: error instanceof Error ? error.message : "Upload failed",
+    });
+  }
+}
+
+/**
  * Hover over an element
  */
 export async function hover(
@@ -417,6 +460,7 @@ export async function dispatchInteraction(
     url?: string;
     selector?: string;
     value?: string;
+    filePath?: string;
     direction?: "up" | "down" | "left" | "right";
     amount?: number;
     delay?: number;
@@ -529,6 +573,16 @@ export async function dispatchInteraction(
         });
       }
       return hover(sessionId, params.selector, {
+        timeout: params.timeout,
+      });
+
+    case "upload":
+      if (!params.selector || !params.filePath) {
+        return makeResult(false, "upload", {
+          error: "Selector and filePath are required for upload action",
+        });
+      }
+      return upload(sessionId, params.selector, params.filePath, {
         timeout: params.timeout,
       });
 

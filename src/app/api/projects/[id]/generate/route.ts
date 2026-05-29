@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-guard";
 import { db } from "@/lib/db";
 import { generateText, PROMPTS } from "@/lib/ai";
 
@@ -10,10 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireAuth(request);
 
     const { id } = await params;
 
@@ -23,10 +19,7 @@ export async function POST(
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    const user = await db.user.findUnique({
-      where: { email: session.user.email },
-    });
-    if (!user || existingProject.userId !== user.id) {
+    if (existingProject.userId !== auth.userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -55,6 +48,7 @@ export async function POST(
       projectId: id,
     });
   } catch (error) {
+    if (error instanceof NextResponse) return error;
     console.error("Failed to generate video:", error);
     return NextResponse.json(
       { error: "Failed to generate video" },

@@ -49,6 +49,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const userId = (session.user as { id?: string })?.id || session.user.email;
+
     const body = await request.json();
     const parsed = testSchema.safeParse(body);
 
@@ -69,6 +71,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: `Session not found: ${sessionId}` },
         { status: 404 }
+      );
+    }
+
+    // Verify session ownership
+    if (!browserManager.isSessionOwner(sessionId, userId)) {
+      return NextResponse.json(
+        { error: "Forbidden: You do not own this session" },
+        { status: 403 }
       );
     }
 

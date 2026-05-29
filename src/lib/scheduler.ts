@@ -1,8 +1,11 @@
 /**
- * Scheduler System v2.0 — Persistent job queue with priority
+ * Scheduler System v3.0 — Persistent job queue with priority + continuous worker
  *
  * FIXED: Job processors now ACTUALLY invoke the AI orchestrator
  * instead of returning placeholder data.
+ *
+ * v3: Added SchedulerWorker for continuous polling, atomic locking,
+ *     stale lock cleanup, and EventEmitter-based monitoring.
  *
  * Manages the lifecycle of all async operations:
  *   - Content generation pipeline steps
@@ -14,6 +17,7 @@
  */
 
 import { db } from '@/lib/db';
+import { EventEmitter } from 'events';
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
 
@@ -68,6 +72,37 @@ export interface ScheduleContentInput {
   isDryRun?: boolean;
 }
 
+export interface SchedulerWorkerConfig {
+  /** Polling interval in seconds (default: 30) */
+  pollIntervalSeconds: number;
+  /** Max concurrent jobs being processed (default: 3) */
+  concurrency: number;
+  /** Stale lock age in minutes before cleanup (default: 10) */
+  staleLockMinutes: number;
+  /** Stale lock cleanup interval in seconds (default: 60) */
+  staleLockCleanupSeconds: number;
+}
+
+export interface WorkerStatus {
+  running: boolean;
+  uptimeMs: number;
+  jobsProcessed: number;
+  jobsFailed: number;
+  jobsCurrentlyProcessing: number;
+  lastPollAt: Date | null;
+  startedAt: Date | null;
+  pollIntervalSeconds: number;
+  concurrency: number;
+}
+
+export type WorkerEvent =
+  | 'job:started'
+  | 'job:completed'
+  | 'job:failed'
+  | 'worker:idle'
+  | 'worker:error'
+  | 'stale:cleaned';
+
 // ─── Enqueue Job ─────────────────────────────────────────────────────────────
 
 export async function enqueueJob(
@@ -104,49 +139,76 @@ export async function enqueueJob(
   }
 }
 
-// ─── Dequeue Next Job ────────────────────────────────────────────────────────
+// ─── Dequeue Next Job (Atomic — Race Condition Safe) ─────────────────────────
+//
+// Uses a transaction with updateMany + status guard to atomically claim a job.
+// Multiple workers can call this concurrently without double-processing.
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function dequeueNextJob(
-  workspaceId: string
+  workspaceId: string,
+  workerId?: string
 ): Promise<{
   id: string;
   jobType: string;
   payload: JobPayload;
   retryCount: number;
 } | null> {
+  const effectiveWorkerId = workerId || `worker-${process.pid}-${Date.now()}`;
+
   try {
-    const jobs = await db.schedulerJob.findMany({
-      where: {
-        workspaceId,
-        status: 'pending',
-        nextAttempt: { lte: new Date() },
-      },
-      orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
-      take: 1,
+    const result = await db.$transaction(async (tx) => {
+      // Find candidate jobs — take more than 1 so we can try the next if the first is claimed
+      const candidates = await tx.schedulerJob.findMany({
+        where: {
+          workspaceId,
+          status: 'pending',
+          nextAttempt: { lte: new Date() },
+        },
+        orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+        take: 5, // grab a few candidates to reduce transaction retries
+      });
+
+      if (candidates.length === 0) return null;
+
+      const lockUntil = new Date(Date.now() + 10 * 60 * 1000);
+
+      // Try to claim each candidate atomically
+      for (const candidate of candidates) {
+        const updated = await tx.schedulerJob.updateMany({
+          where: {
+            id: candidate.id,
+            status: 'pending', // double-check still pending inside the transaction
+          },
+          data: {
+            status: 'locked',
+            lockedBy: effectiveWorkerId,
+            lockUntil,
+          },
+        });
+
+        if (updated.count === 1) {
+          // Successfully claimed this job
+          return {
+            id: candidate.id,
+            jobType: candidate.jobType,
+            payload: JSON.parse(candidate.payloadJson || '{}'),
+            retryCount: candidate.retryCount,
+          };
+        }
+        // Another worker claimed it — try the next candidate
+      }
+
+      return null; // All candidates were claimed by other workers
     });
 
-    if (jobs.length === 0) return null;
+    if (result) {
+      await logSchedulerAction('job_dequeued', workspaceId, result.id, result.jobType, {
+        workerId: effectiveWorkerId,
+      });
+    }
 
-    const job = jobs[0];
-
-    const lockUntil = new Date(Date.now() + 10 * 60 * 1000);
-    await db.schedulerJob.update({
-      where: { id: job.id },
-      data: {
-        status: 'locked',
-        lockedBy: `worker-${Date.now()}`,
-        lockUntil,
-      },
-    });
-
-    await logSchedulerAction('job_dequeued', workspaceId, job.id, job.jobType, {});
-
-    return {
-      id: job.id,
-      jobType: job.jobType,
-      payload: JSON.parse(job.payloadJson || '{}'),
-      retryCount: job.retryCount,
-    };
+    return result;
   } catch (error) {
     await logSchedulerError('job_dequeue_failed', workspaceId, '', '', error);
     return null;
@@ -659,3 +721,355 @@ async function logSchedulerError(
     // Logging failure should not break scheduler operations
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SchedulerWorker — Continuous polling worker with concurrency control
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export class SchedulerWorker extends EventEmitter {
+  private config: Required<SchedulerWorkerConfig>;
+  private running = false;
+  private pollTimer: ReturnType<typeof setTimeout> | null = null;
+  private staleCleanupTimer: ReturnType<typeof setInterval> | null = null;
+  private activeJobs = new Set<string>();       // job IDs currently being processed
+  private activePromises = new Set<Promise<void>>(); // in-flight processing promises
+  private startedAt: Date | null = null;
+  private lastPollAt: Date | null = null;
+  private jobsProcessed = 0;
+  private jobsFailed = 0;
+  private shuttingDown = false;
+
+  constructor(config: Partial<SchedulerWorkerConfig> = {}) {
+    super();
+    this.config = {
+      pollIntervalSeconds: config.pollIntervalSeconds ?? 30,
+      concurrency: config.concurrency ?? 3,
+      staleLockMinutes: config.staleLockMinutes ?? 10,
+      staleLockCleanupSeconds: config.staleLockCleanupSeconds ?? 60,
+    };
+  }
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
+  /**
+   * Start the worker polling loop.
+   * Idempotent — calling start() on an already-running worker is a no-op.
+   */
+  start(): void {
+    if (this.running) return;
+    this.running = true;
+    this.shuttingDown = false;
+    this.startedAt = new Date();
+
+    // Register graceful shutdown handlers
+    this.registerSignalHandlers();
+
+    // Start stale lock cleanup interval
+    this.startStaleLockCleanup();
+
+    // Kick off the first poll immediately
+    this.schedulePoll(0);
+
+    this.emit('worker:started');
+  }
+
+  /**
+   * Gracefully stop the worker.
+   * Waits for all in-flight jobs to finish before resolving.
+   */
+  async stop(): Promise<void> {
+    if (!this.running) return;
+
+    this.running = false;
+    this.shuttingDown = true;
+
+    // Clear the next poll timer so no new polls happen
+    if (this.pollTimer !== null) {
+      clearTimeout(this.pollTimer);
+      this.pollTimer = null;
+    }
+
+    // Clear stale cleanup interval
+    if (this.staleCleanupTimer !== null) {
+      clearInterval(this.staleCleanupTimer);
+      this.staleCleanupTimer = null;
+    }
+
+    // Remove signal handlers
+    this.removeSignalHandlers();
+
+    // Wait for all active jobs to complete
+    if (this.activePromises.size > 0) {
+      await Promise.allSettled(this.activePromises);
+    }
+
+    this.emit('worker:stopped');
+  }
+
+  /**
+   * Returns whether the worker is currently running.
+   */
+  isRunning(): boolean {
+    return this.running;
+  }
+
+  /**
+   * Returns a snapshot of worker metrics.
+   */
+  getStatus(): WorkerStatus {
+    return {
+      running: this.running,
+      uptimeMs: this.startedAt ? Date.now() - this.startedAt.getTime() : 0,
+      jobsProcessed: this.jobsProcessed,
+      jobsFailed: this.jobsFailed,
+      jobsCurrentlyProcessing: this.activeJobs.size,
+      lastPollAt: this.lastPollAt,
+      startedAt: this.startedAt,
+      pollIntervalSeconds: this.config.pollIntervalSeconds,
+      concurrency: this.config.concurrency,
+    };
+  }
+
+  // ── Polling Loop ───────────────────────────────────────────────────────────
+
+  private schedulePoll(delayMs: number): void {
+    if (!this.running || this.shuttingDown) return;
+
+    this.pollTimer = setTimeout(() => {
+      this.poll().catch((err) => {
+        this.emit('worker:error', err);
+      });
+    }, delayMs);
+  }
+
+  private async poll(): Promise<void> {
+    if (!this.running || this.shuttingDown) return;
+
+    this.lastPollAt = new Date();
+
+    // Clean up stale locks before dequeueing
+    await this.cleanupStaleLocks();
+
+    // Fill available concurrency slots
+    const availableSlots = this.config.concurrency - this.activeJobs.size;
+    if (availableSlots <= 0) {
+      // All slots full — schedule next poll and return
+      this.schedulePoll(this.config.pollIntervalSeconds * 1000);
+      return;
+    }
+
+    // Dequeue up to `availableSlots` jobs across ALL workspaces
+    let jobsDequeued = 0;
+    for (let i = 0; i < availableSlots; i++) {
+      const job = await this.dequeueGlobal();
+      if (!job) break;
+
+      jobsDequeued++;
+      this.processJobAsync(job.id, job.workspaceId, job.jobType);
+    }
+
+    if (jobsDequeued === 0 && this.activeJobs.size === 0) {
+      this.emit('worker:idle');
+    }
+
+    // Schedule the next poll
+    this.schedulePoll(this.config.pollIntervalSeconds * 1000);
+  }
+
+  /**
+   * Dequeue the next pending job across all workspaces (global).
+   * Uses the same atomic transaction pattern as dequeueNextJob.
+   */
+  private async dequeueGlobal(): Promise<{
+    id: string;
+    workspaceId: string;
+    jobType: string;
+  } | null> {
+    const workerId = `worker-${process.pid}-${Date.now()}`;
+
+    try {
+      const result = await db.$transaction(async (tx) => {
+        const candidates = await tx.schedulerJob.findMany({
+          where: {
+            status: 'pending',
+            nextAttempt: { lte: new Date() },
+          },
+          orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+          take: 5,
+        });
+
+        if (candidates.length === 0) return null;
+
+        const lockUntil = new Date(Date.now() + 10 * 60 * 1000);
+
+        for (const candidate of candidates) {
+          const updated = await tx.schedulerJob.updateMany({
+            where: {
+              id: candidate.id,
+              status: 'pending',
+            },
+            data: {
+              status: 'locked',
+              lockedBy: workerId,
+              lockUntil,
+            },
+          });
+
+          if (updated.count === 1) {
+            return {
+              id: candidate.id,
+              workspaceId: candidate.workspaceId,
+              jobType: candidate.jobType,
+            };
+          }
+        }
+
+        return null;
+      });
+
+      if (result) {
+        await logSchedulerAction('job_dequeued', result.workspaceId, result.id, result.jobType, {
+          workerId,
+          source: 'scheduler_worker',
+        });
+      }
+
+      return result;
+    } catch (error) {
+      await logSchedulerError('worker_dequeue_failed', '', '', '', error);
+      this.emit('worker:error', error);
+      return null;
+    }
+  }
+
+  /**
+   * Process a job asynchronously without blocking the poll loop.
+   */
+  private processJobAsync(jobId: string, workspaceId: string, jobType: string): void {
+    this.activeJobs.add(jobId);
+
+    const promise = (async () => {
+      try {
+        this.emit('job:started', { jobId, jobType, workspaceId });
+
+        const result = await processJob(jobId);
+
+        if (result.success) {
+          this.jobsProcessed++;
+          this.emit('job:completed', {
+            jobId,
+            jobType,
+            workspaceId,
+            result: result.result,
+          });
+        } else {
+          this.jobsFailed++;
+          this.emit('job:failed', {
+            jobId,
+            jobType,
+            workspaceId,
+            error: result.error,
+          });
+        }
+      } catch (error) {
+        this.jobsFailed++;
+        this.emit('job:failed', {
+          jobId,
+          jobType,
+          workspaceId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      } finally {
+        this.activeJobs.delete(jobId);
+      }
+    })();
+
+    this.activePromises.add(promise);
+    promise.finally(() => {
+      this.activePromises.delete(promise);
+    });
+  }
+
+  // ── Stale Lock Cleanup ─────────────────────────────────────────────────────
+
+  /**
+   * Clean up locks that have been held longer than the configured stale threshold.
+   * This runs both on every poll cycle and on a separate interval timer.
+   */
+  private async cleanupStaleLocks(): Promise<number> {
+    try {
+      const staleCutoff = new Date(
+        Date.now() - this.config.staleLockMinutes * 60 * 1000
+      );
+
+      // Also clean up running jobs whose lockUntil has expired
+      const result = await db.schedulerJob.updateMany({
+        where: {
+          status: { in: ['locked', 'running'] },
+          lockUntil: { lt: staleCutoff },
+        },
+        data: {
+          status: 'pending',
+          lockedBy: null,
+          lockUntil: null,
+        },
+      });
+
+      if (result.count > 0) {
+        this.emit('stale:cleaned', { count: result.count });
+        await logSchedulerAction('stale_locks_cleaned', '', '', '', {
+          count: result.count,
+          staleLockMinutes: this.config.staleLockMinutes,
+        });
+      }
+
+      return result.count;
+    } catch (error) {
+      await logSchedulerError('stale_lock_cleanup_failed', '', '', '', error);
+      return 0;
+    }
+  }
+
+  private startStaleLockCleanup(): void {
+    // Clean up stale locks on a regular interval, independent of the poll cycle
+    this.staleCleanupTimer = setInterval(async () => {
+      try {
+        await this.cleanupStaleLocks();
+      } catch (error) {
+        this.emit('worker:error', error);
+      }
+    }, this.config.staleLockCleanupSeconds * 1000);
+  }
+
+  // ── Graceful Shutdown ──────────────────────────────────────────────────────
+
+  private signalHandlers: Record<string, () => void> = {};
+
+  private registerSignalHandlers(): void {
+    const handler = async () => {
+      await this.stop();
+    };
+
+    this.signalHandlers = {
+      SIGTERM: handler,
+      SIGINT: handler,
+    };
+
+    for (const [signal, fn] of Object.entries(this.signalHandlers)) {
+      process.on(signal as NodeJS.Signals, fn);
+    }
+  }
+
+  private removeSignalHandlers(): void {
+    for (const [signal, fn] of Object.entries(this.signalHandlers)) {
+      process.removeListener(signal as NodeJS.Signals, fn);
+    }
+    this.signalHandlers = {};
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Singleton Export
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const schedulerWorker = new SchedulerWorker();

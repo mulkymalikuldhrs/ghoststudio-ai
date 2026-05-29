@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
 import { SYSTEM_PROMPT, aiChat } from '@/lib/ai'
 
 export async function POST(request: NextRequest) {
   try {
-    // Authentication check
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const body = await request.json()
     const { workspaceId, type } = body
 
@@ -21,6 +14,8 @@ export async function POST(request: NextRequest) {
 
     const validTypes = ['preventive', 'corrective', 'strategic', 'behavioral']
     const suggestionType = validTypes.includes(type) ? type : 'preventive'
+
+    await requireWorkspaceAccess(request, workspaceId)
 
     const workspace = await db.workspace.findUnique({
       where: { id: workspaceId },
@@ -36,16 +31,6 @@ export async function POST(request: NextRequest) {
 
     if (!workspace) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
-    }
-
-    // Workspace membership verification
-    if (workspace.ownerId !== session.user.id) {
-      const membership = await db.workspaceMember.findUnique({
-        where: { workspaceId_userId: { workspaceId, userId: session.user.id } },
-      })
-      if (!membership) {
-        return NextResponse.json({ error: 'Forbidden: You do not have access to this workspace' }, { status: 403 })
-      }
     }
 
     const contextData = {
@@ -150,6 +135,7 @@ Return ONLY the JSON array, no other text.`
       suggestions: createdSuggestions,
     })
   } catch (error) {
+    if (error instanceof NextResponse) return error
     console.error('AI suggest error:', error)
     return NextResponse.json({ error: 'Failed to generate suggestions' }, { status: 500 })
   }

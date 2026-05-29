@@ -12,6 +12,8 @@ export type EnergyCategory =
   | "hook_repetition"
   | "visual_fatigue";
 
+export type FatigueLevel = "low" | "medium" | "high" | "critical";
+
 export interface EnergyStatus {
   overall: number;          // 0-100 average fatigue
   status: "healthy" | "moderate" | "warning" | "critical";
@@ -25,7 +27,13 @@ export interface EnergyCategoryStatus {
   fatigueScore: number;
   publishCount: number;
   label: string;
-  color: string;
+  level: FatigueLevel;
+}
+
+// Auto-decay result
+export interface EnergyAutoDecayResult {
+  decayed: number;
+  reset: number;
 }
 
 // Fatigue thresholds
@@ -48,6 +56,10 @@ const FATIGUE_INCREMENT = {
 
 // Natural fatigue decay per hour
 const FATIGUE_DECAY_RATE = 0.5;
+
+// LRU cache constants
+const MAX_CACHE_SIZE = 100;
+const EVICT_COUNT = 20;
 
 export class EnergySystem {
   private workspaceId: string;
@@ -95,7 +107,7 @@ export class EnergySystem {
       fatigueScore: entry.fatigueScore,
       publishCount: entry.publishCount,
       label: this.getCategoryLabel(entry.category),
-      color: this.getFatigueColor(entry.fatigueScore),
+      level: this.getFatigueLevel(entry.fatigueScore),
     }));
 
     const recommendations = this.generateRecommendations(categories);
@@ -197,7 +209,7 @@ export class EnergySystem {
     return { recommendedActions, avoidTopics, cooldownMinutes };
   }
 
-  // Apply time-based decay to all entries
+  // Apply time-based decay to a provided list of entries
   private async applyDecay(entries: { id: string; fatigueScore: number; lastResetAt: Date }[]): Promise<void> {
     const now = new Date();
 
@@ -218,6 +230,64 @@ export class EnergySystem {
     }
   }
 
+  // Auto-decay: proactively apply time-based decay to all energy entries
+  // Instead of waiting for getStatus() calls, this runs on a timer
+  async autoDecay(): Promise<EnergyAutoDecayResult> {
+    const entries = await db.energyEntry.findMany({
+      where: { workspaceId: this.workspaceId },
+    });
+
+    if (entries.length === 0) {
+      return { decayed: 0, reset: 0 };
+    }
+
+    const now = new Date();
+    let decayed = 0;
+    let reset = 0;
+
+    for (const entry of entries) {
+      const hoursSinceReset = (now.getTime() - entry.lastResetAt.getTime()) / (1000 * 60 * 60);
+      const decay = hoursSinceReset * FATIGUE_DECAY_RATE;
+
+      if (decay > 0) {
+        const newScore = Math.max(0, entry.fatigueScore - decay);
+
+        // If fatigue has fully decayed to 0, reset the entry
+        const shouldReset = newScore === 0;
+
+        await db.energyEntry.update({
+          where: { id: entry.id },
+          data: {
+            fatigueScore: newScore,
+            publishCount: shouldReset ? 0 : entry.publishCount,
+            lastResetAt: now,
+          },
+        });
+
+        decayed++;
+        if (shouldReset) reset++;
+      }
+    }
+
+    return { decayed, reset };
+  }
+
+  // Start automatic decay on an interval timer
+  // Returns a cleanup function to stop the timer
+  startAutoDecay(intervalMs: number = 60 * 60 * 1000): () => void {
+    const timer = setInterval(async () => {
+      try {
+        await this.autoDecay();
+      } catch (error) {
+        console.error("[EnergySystem] Auto-decay error:", error);
+      }
+    }, intervalMs);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }
+
   private getCategoryLabel(category: string): string {
     const labels: Record<string, string> = {
       topic_fatigue: "Topic Fatigue",
@@ -230,12 +300,12 @@ export class EnergySystem {
     return labels[category] || category;
   }
 
-  private getFatigueColor(score: number): string {
-    if (score >= THRESHOLDS.critical) return "text-red-600";
-    if (score >= THRESHOLDS.warning) return "text-red-500";
-    if (score >= THRESHOLDS.moderate) return "text-yellow-500";
-    if (score >= THRESHOLDS.healthy) return "text-emerald-500";
-    return "text-green-500";
+  // Returns a semantic fatigue level instead of CSS classes (UI concern removed)
+  getFatigueLevel(score: number): FatigueLevel {
+    if (score >= THRESHOLDS.critical) return "critical";
+    if (score >= THRESHOLDS.warning) return "high";
+    if (score >= THRESHOLDS.moderate) return "medium";
+    return "low";
   }
 
   private generateRecommendations(categories: EnergyCategoryStatus[]): string[] {
@@ -269,12 +339,41 @@ export class EnergySystem {
   }
 }
 
-// Singleton factory
-const energySystems = new Map<string, EnergySystem>();
+// ─── Singleton factory with LRU eviction ──────────────────────────────────────
+
+interface CacheEntry {
+  system: EnergySystem;
+  lastAccess: number;
+}
+
+const energySystems = new Map<string, CacheEntry>();
+
+function evictIfNeeded(): void {
+  if (energySystems.size <= MAX_CACHE_SIZE) return;
+
+  // Sort by lastAccess ascending (least recently used first)
+  const entries = [...energySystems.entries()].sort(
+    (a, b) => a[1].lastAccess - b[1].lastAccess
+  );
+
+  // Evict the EVICT_COUNT least-recently-accessed entries
+  const toEvict = entries.slice(0, EVICT_COUNT);
+  for (const [key] of toEvict) {
+    energySystems.delete(key);
+  }
+}
 
 export function getEnergySystem(workspaceId: string): EnergySystem {
-  if (!energySystems.has(workspaceId)) {
-    energySystems.set(workspaceId, new EnergySystem(workspaceId));
+  const existing = energySystems.get(workspaceId);
+  if (existing) {
+    existing.lastAccess = Date.now();
+    return existing.system;
   }
-  return energySystems.get(workspaceId)!;
+
+  // Evict stale entries before adding a new one
+  evictIfNeeded();
+
+  const system = new EnergySystem(workspaceId);
+  energySystems.set(workspaceId, { system, lastAccess: Date.now() });
+  return system;
 }

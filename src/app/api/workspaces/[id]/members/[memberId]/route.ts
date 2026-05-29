@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
 
 export async function PATCH(
@@ -8,22 +7,17 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; memberId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { id: workspaceId, memberId } = await params
-    const body = await request.json()
-    const { energyLevel, stressLevel, alias, authorityLevel, constraints, preferences, visibilityScope, role } = body
+    const { auth, workspace, membership } = await requireWorkspaceAccess(request, workspaceId)
 
-    // Verify workspace access
-    const membership = await db.workspaceMember.findFirst({
-      where: { workspaceId, userId: session.user.id, role: { in: ['owner', 'admin'] } },
-    })
-    if (!membership) {
+    // Check admin/owner role
+    const isAdmin = workspace.ownerId === auth.userId || (membership?.role && ['owner', 'admin'].includes(membership.role))
+    if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden: insufficient permissions' }, { status: 403 })
     }
+
+    const body = await request.json()
+    const { energyLevel, stressLevel, alias, authorityLevel, constraints, preferences, visibilityScope, role } = body
 
     const member = await db.workspaceMember.findFirst({
       where: { id: memberId, workspaceId },
@@ -48,28 +42,22 @@ export async function PATCH(
 
     return NextResponse.json({ member: updated })
   } catch (error) {
+    if (error instanceof NextResponse) return error
     console.error('Update member error:', error)
     return NextResponse.json({ error: 'Failed to update member' }, { status: 500 })
   }
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string; memberId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { id: workspaceId, memberId } = await params
+    const { auth, workspace } = await requireWorkspaceAccess(request, workspaceId)
 
     // Verify workspace ownership
-    const membership = await db.workspaceMember.findFirst({
-      where: { workspaceId, userId: session.user.id, role: 'owner' },
-    })
-    if (!membership) {
+    if (workspace.ownerId !== auth.userId) {
       return NextResponse.json({ error: 'Forbidden: only workspace owner can remove members' }, { status: 403 })
     }
 
@@ -88,6 +76,7 @@ export async function DELETE(
     await db.workspaceMember.delete({ where: { id: memberId } })
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (error instanceof NextResponse) return error
     console.error('Delete member error:', error)
     return NextResponse.json({ error: 'Failed to delete member' }, { status: 500 })
   }

@@ -21,7 +21,8 @@ export type BrowserAction =
   | "waitForNavigation"
   | "goBack"
   | "goForward"
-  | "refresh";
+  | "refresh"
+  | "upload";
 
 export type BrowserSessionStatus =
   | "connected"
@@ -86,6 +87,7 @@ export interface InteractionInput {
   selector?: string;
   value?: string;
   url?: string;
+  filePath?: string;
   timeout?: number;
   direction?: "up" | "down" | "left" | "right";
   amount?: number;

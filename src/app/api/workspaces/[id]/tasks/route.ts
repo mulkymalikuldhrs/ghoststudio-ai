@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
 
 export async function POST(
@@ -8,17 +7,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { id: workspaceId } = await params
+    const { auth, workspace, membership } = await requireWorkspaceAccess(request, workspaceId)
 
-    const membership = await db.workspaceMember.findFirst({
-      where: { workspaceId, userId: session.user.id, role: { in: ['owner', 'admin'] } },
-    })
-    if (!membership) {
+    // Check admin/owner role
+    const isAdmin = workspace.ownerId === auth.userId || (membership?.role && ['owner', 'admin'].includes(membership.role))
+    if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden: not a workspace member' }, { status: 403 })
     }
 
@@ -46,6 +40,7 @@ export async function POST(
 
     return NextResponse.json({ task }, { status: 201 })
   } catch (error) {
+    if (error instanceof NextResponse) return error
     console.error('Create task error:', error)
     return NextResponse.json({ error: 'Failed to create task' }, { status: 500 })
   }
@@ -56,19 +51,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { id: workspaceId } = await params
-
-    const membership = await db.workspaceMember.findFirst({
-      where: { workspaceId, userId: session.user.id },
-    })
-    if (!membership) {
-      return NextResponse.json({ error: 'Forbidden: not a workspace member' }, { status: 403 })
-    }
+    await requireWorkspaceAccess(request, workspaceId)
 
     const status = request.nextUrl.searchParams.get('status')
     const priority = request.nextUrl.searchParams.get('priority')
@@ -86,6 +70,7 @@ export async function GET(
 
     return NextResponse.json({ tasks })
   } catch (error) {
+    if (error instanceof NextResponse) return error
     console.error('List tasks error:', error)
     return NextResponse.json({ error: 'Failed to list tasks' }, { status: 500 })
   }

@@ -1,23 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
 import { SYSTEM_PROMPT, aiChat } from '@/lib/ai'
 
 export async function POST(request: NextRequest) {
   try {
-    // Authentication check
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const body = await request.json()
     const { workspaceId } = body
 
     if (!workspaceId) {
       return NextResponse.json({ error: 'workspaceId is required' }, { status: 400 })
     }
+
+    await requireWorkspaceAccess(request, workspaceId)
 
     const workspace = await db.workspace.findUnique({
       where: { id: workspaceId },
@@ -31,16 +26,6 @@ export async function POST(request: NextRequest) {
 
     if (!workspace) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
-    }
-
-    // Workspace membership verification
-    if (workspace.ownerId !== session.user.id) {
-      const membership = await db.workspaceMember.findUnique({
-        where: { workspaceId_userId: { workspaceId, userId: session.user.id } },
-      })
-      if (!membership) {
-        return NextResponse.json({ error: 'Forbidden: You do not have access to this workspace' }, { status: 403 })
-      }
     }
 
     const financeData = {
@@ -141,6 +126,7 @@ Format your response as structured analysis with clear sections.`
       },
     })
   } catch (error) {
+    if (error instanceof NextResponse) return error
     console.error('AI audit finances error:', error)
     return NextResponse.json({ error: 'Failed to audit finances' }, { status: 500 })
   }

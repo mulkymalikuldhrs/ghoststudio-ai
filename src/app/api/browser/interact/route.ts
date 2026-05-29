@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-guard";
 import { browserManager } from "@/lib/browser/browser-manager";
 import { dispatchInteraction } from "@/lib/browser/page-interactions";
 import { z } from "zod";
 import type { BrowserAction } from "@/types/browser";
-
-// Helper: Get authenticated user ID or return 401
-async function getAuthUserId(request: NextRequest): Promise<string | null> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return null;
-  return (session.user as { id?: string })?.id || session.user.email;
-}
 
 // Validation schema for browser interaction
 const interactSchema = z.object({
@@ -53,13 +45,7 @@ const interactSchema = z.object({
 // POST /api/browser/interact — Execute a browser interaction
 export async function POST(request: NextRequest) {
   try {
-    const userId = await getAuthUserId(request);
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuth(request);
 
     const body = await request.json();
     const parsed = interactSchema.safeParse(body);
@@ -85,7 +71,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify session ownership
-    if (!browserManager.isSessionOwner(sessionId, userId)) {
+    if (!browserManager.isSessionOwner(sessionId, auth.userId)) {
       return NextResponse.json(
         { error: "Forbidden: You do not own this session" },
         { status: 403 }
@@ -101,6 +87,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ result });
   } catch (error) {
+    if (error instanceof NextResponse) return error;
     console.error("Browser interact error:", error);
     return NextResponse.json(
       { error: "Failed to execute browser interaction" },

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
 
 export async function POST(
@@ -8,17 +7,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { id: workspaceId } = await params
+    const { auth, workspace, membership } = await requireWorkspaceAccess(request, workspaceId)
 
-    const membership = await db.workspaceMember.findFirst({
-      where: { workspaceId, userId: session.user.id, role: { in: ['owner', 'admin'] } },
-    })
-    if (!membership) {
+    // Check admin/owner role
+    const isAdmin = workspace.ownerId === auth.userId || (membership?.role && ['owner', 'admin'].includes(membership.role))
+    if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden: not a workspace member' }, { status: 403 })
     }
 
@@ -29,8 +23,8 @@ export async function POST(
       return NextResponse.json({ error: 'userId is required' }, { status: 400 })
     }
 
-    const workspace = await db.workspace.findUnique({ where: { id: workspaceId } })
-    if (!workspace) {
+    const ws = await db.workspace.findUnique({ where: { id: workspaceId } })
+    if (!ws) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
     }
 
@@ -58,29 +52,19 @@ export async function POST(
 
     return NextResponse.json({ member }, { status: 201 })
   } catch (error) {
+    if (error instanceof NextResponse) return error
     console.error('Add member error:', error)
     return NextResponse.json({ error: 'Failed to add member' }, { status: 500 })
   }
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { id: workspaceId } = await params
-
-    const membership = await db.workspaceMember.findFirst({
-      where: { workspaceId, userId: session.user.id },
-    })
-    if (!membership) {
-      return NextResponse.json({ error: 'Forbidden: not a workspace member' }, { status: 403 })
-    }
+    await requireWorkspaceAccess(request, workspaceId)
 
     const members = await db.workspaceMember.findMany({
       where: { workspaceId },
@@ -94,6 +78,7 @@ export async function GET(
 
     return NextResponse.json({ members })
   } catch (error) {
+    if (error instanceof NextResponse) return error
     console.error('List members error:', error)
     return NextResponse.json({ error: 'Failed to list members' }, { status: 500 })
   }

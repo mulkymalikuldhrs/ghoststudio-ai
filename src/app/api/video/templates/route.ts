@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-guard";
 import { db } from "@/lib/db";
 
 // GET /api/video/templates - List video templates
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      );
-    }
+    await requireAuth(request);
 
     const { searchParams } = new URL(request.url);
     const category = searchParams.get("category");
@@ -30,6 +23,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ templates });
   } catch (error) {
+    if (error instanceof NextResponse) return error;
     console.error("Video templates list error:", error);
     return NextResponse.json(
       { error: "Failed to fetch video templates" },

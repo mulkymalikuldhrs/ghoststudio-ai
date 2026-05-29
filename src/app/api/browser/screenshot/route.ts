@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-guard";
 import { browserManager } from "@/lib/browser/browser-manager";
 import { z } from "zod";
-
-// Helper: Get authenticated user ID or return 401
-async function getAuthUserId(request: NextRequest): Promise<string | null> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return null;
-  return (session.user as { id?: string })?.id || session.user.email;
-}
 
 // Validation schema for screenshot request
 const screenshotSchema = z.object({
@@ -23,13 +15,7 @@ const screenshotSchema = z.object({
 // POST /api/browser/screenshot — Take a screenshot
 export async function POST(request: NextRequest) {
   try {
-    const userId = await getAuthUserId(request);
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuth(request);
 
     const body = await request.json();
     const parsed = screenshotSchema.safeParse(body);
@@ -54,7 +40,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!browserManager.isSessionOwner(sessionId, userId)) {
+    if (!browserManager.isSessionOwner(sessionId, auth.userId)) {
       return NextResponse.json(
         { error: "Forbidden: You do not own this session" },
         { status: 403 }
@@ -111,6 +97,7 @@ export async function POST(request: NextRequest) {
       fullPage,
     });
   } catch (error) {
+    if (error instanceof NextResponse) return error;
     console.error("Browser screenshot error:", error);
     return NextResponse.json(
       { error: "Failed to take screenshot" },

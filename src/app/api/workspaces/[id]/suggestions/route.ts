@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
 
 export async function GET(
@@ -8,19 +7,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { id: workspaceId } = await params
-
-    const membership = await db.workspaceMember.findFirst({
-      where: { workspaceId, userId: session.user.id },
-    })
-    if (!membership) {
-      return NextResponse.json({ error: 'Forbidden: not a workspace member' }, { status: 403 })
-    }
+    await requireWorkspaceAccess(request, workspaceId)
 
     const status = request.nextUrl.searchParams.get('status')
     const type = request.nextUrl.searchParams.get('type')
@@ -37,6 +25,7 @@ export async function GET(
 
     return NextResponse.json({ suggestions })
   } catch (error) {
+    if (error instanceof NextResponse) return error
     console.error('List suggestions error:', error)
     return NextResponse.json({ error: 'Failed to list suggestions' }, { status: 500 })
   }

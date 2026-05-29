@@ -58,6 +58,7 @@ export interface AgentResult {
     tokensUsed?: number;
     durationMs?: number;
     model?: string;
+    [key: string]: unknown;
   };
 }
 

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
 
 export async function PATCH(
@@ -8,17 +7,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; docId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { id: workspaceId, docId } = await params
+    const { auth, workspace, membership } = await requireWorkspaceAccess(request, workspaceId)
 
-    const membership = await db.workspaceMember.findFirst({
-      where: { workspaceId, userId: session.user.id, role: { in: ['owner', 'admin'] } },
-    })
-    if (!membership) {
+    // Check admin/owner role
+    const isAdmin = workspace.ownerId === auth.userId || (membership?.role && ['owner', 'admin'].includes(membership.role))
+    if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden: not a workspace member' }, { status: 403 })
     }
 
@@ -55,27 +49,23 @@ export async function PATCH(
 
     return NextResponse.json({ document: updated })
   } catch (error) {
+    if (error instanceof NextResponse) return error
     console.error('Update vault document error:', error)
     return NextResponse.json({ error: 'Failed to update vault document' }, { status: 500 })
   }
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string; docId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { id: workspaceId, docId } = await params
+    const { auth, workspace, membership } = await requireWorkspaceAccess(request, workspaceId)
 
-    const membership = await db.workspaceMember.findFirst({
-      where: { workspaceId, userId: session.user.id, role: { in: ['owner', 'admin'] } },
-    })
-    if (!membership) {
+    // Check admin/owner role
+    const isAdmin = workspace.ownerId === auth.userId || (membership?.role && ['owner', 'admin'].includes(membership.role))
+    if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden: not a workspace member' }, { status: 403 })
     }
 
@@ -91,6 +81,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (error instanceof NextResponse) return error
     console.error('Delete vault document error:', error)
     return NextResponse.json({ error: 'Failed to delete vault document' }, { status: 500 })
   }

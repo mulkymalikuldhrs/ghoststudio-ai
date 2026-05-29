@@ -33,6 +33,12 @@ export interface MemoryInsight {
   totalEntries: number;
 }
 
+// Auto-decay result
+export interface AutoDecayResult {
+  decayed: number;
+  deactivated: number;
+}
+
 // Memory categories used across the system
 export const MEMORY_CATEGORIES = {
   hook: "hook",
@@ -50,6 +56,15 @@ export const MEMORY_CATEGORIES = {
   hook_type: "hook_type",
   visual_fatigue: "visual_fatigue",
 } as const;
+
+// Auto-decay constants
+const DECAY_THRESHOLD_DAYS = 30;
+const DECAY_PER_WEEK = 1;
+const DEACTIVATION_SCORE = 5;
+
+// LRU cache constants
+const MAX_CACHE_SIZE = 100;
+const EVICT_COUNT = 20;
 
 export class MemorySystem {
   private workspaceId: string;
@@ -153,6 +168,72 @@ export class MemorySystem {
     }
   }
 
+  // Auto-decay: automatically age out old memory entries
+  // Finds all active entries older than 30 days and reduces their score based on age.
+  // Deactivates entries whose score drops below the threshold.
+  async autoDecay(deactivationThreshold: number = DEACTIVATION_SCORE): Promise<AutoDecayResult> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - DECAY_THRESHOLD_DAYS);
+
+    // Find all active memory entries older than the threshold
+    const oldEntries = await db.memoryEntry.findMany({
+      where: {
+        workspaceId: this.workspaceId,
+        isActive: true,
+        createdAt: { lt: cutoffDate },
+      },
+    });
+
+    let decayed = 0;
+    let deactivated = 0;
+    const now = new Date();
+
+    for (const entry of oldEntries) {
+      // Calculate how many full weeks the entry is past the threshold
+      const ageMs = now.getTime() - entry.createdAt.getTime();
+      const ageDays = ageMs / (1000 * 60 * 60 * 24);
+      const weeksOverThreshold = Math.floor(
+        (ageDays - DECAY_THRESHOLD_DAYS) / 7
+      );
+
+      if (weeksOverThreshold <= 0) continue;
+
+      const scoreReduction = weeksOverThreshold * DECAY_PER_WEEK;
+      const newScore = Math.max(0, entry.score - scoreReduction);
+
+      const shouldDeactivate = newScore < deactivationThreshold;
+
+      await db.memoryEntry.update({
+        where: { id: entry.id },
+        data: {
+          score: newScore,
+          isActive: !shouldDeactivate,
+        },
+      });
+
+      decayed++;
+      if (shouldDeactivate) deactivated++;
+    }
+
+    return { decayed, deactivated };
+  }
+
+  // Start automatic decay on an interval timer
+  // Returns a cleanup function to stop the timer
+  startAutoDecay(intervalMs: number = 24 * 60 * 60 * 1000): () => void {
+    const timer = setInterval(async () => {
+      try {
+        await this.autoDecay();
+      } catch (error) {
+        console.error("[MemorySystem] Auto-decay error:", error);
+      }
+    }, intervalMs);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }
+
   // Get insights for a workspace
   async getInsights(): Promise<MemoryInsight[]> {
     const categories = await db.memoryEntry.findMany({
@@ -235,12 +316,41 @@ export class MemorySystem {
   }
 }
 
-// Singleton factory
-const memorySystems = new Map<string, MemorySystem>();
+// ─── Singleton factory with LRU eviction ──────────────────────────────────────
+
+interface CacheEntry {
+  system: MemorySystem;
+  lastAccess: number;
+}
+
+const memorySystems = new Map<string, CacheEntry>();
+
+function evictIfNeeded(): void {
+  if (memorySystems.size <= MAX_CACHE_SIZE) return;
+
+  // Sort by lastAccess ascending (least recently used first)
+  const entries = [...memorySystems.entries()].sort(
+    (a, b) => a[1].lastAccess - b[1].lastAccess
+  );
+
+  // Evict the EVICT_COUNT least-recently-accessed entries
+  const toEvict = entries.slice(0, EVICT_COUNT);
+  for (const [key] of toEvict) {
+    memorySystems.delete(key);
+  }
+}
 
 export function getMemorySystem(workspaceId: string): MemorySystem {
-  if (!memorySystems.has(workspaceId)) {
-    memorySystems.set(workspaceId, new MemorySystem(workspaceId));
+  const existing = memorySystems.get(workspaceId);
+  if (existing) {
+    existing.lastAccess = Date.now();
+    return existing.system;
   }
-  return memorySystems.get(workspaceId)!;
+
+  // Evict stale entries before adding a new one
+  evictIfNeeded();
+
+  const system = new MemorySystem(workspaceId);
+  memorySystems.set(workspaceId, { system, lastAccess: Date.now() });
+  return system;
 }

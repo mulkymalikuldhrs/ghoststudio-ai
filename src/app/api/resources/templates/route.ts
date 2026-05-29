@@ -4,19 +4,12 @@
 // ────────────────────────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-guard";
 import { getPixelleVideoUrl, proxyRequest } from "@/lib/python-engines";
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Authentication required", code: "UNAUTHORIZED" },
-        { status: 401 }
-      );
-    }
+    await requireAuth(request);
 
     const targetUrl = `${getPixelleVideoUrl()}/api/resources/templates`;
     return await proxyRequest(request, targetUrl);

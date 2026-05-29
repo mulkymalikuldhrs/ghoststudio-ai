@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-guard";
 import { db } from "@/lib/db";
 import Stripe from "stripe";
 
@@ -24,14 +23,7 @@ const PLAN_PRICES: Record<string, string> = {
 // POST /api/stripe/checkout - Create a Stripe checkout session
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuth(request);
 
     const body = await request.json();
     const { plan } = body;
@@ -44,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     const user = await db.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: auth.userId },
     });
 
     if (!user) {
@@ -76,6 +68,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ url: checkoutSession.url });
   } catch (error) {
+    if (error instanceof NextResponse) return error;
     console.error("Stripe checkout error:", error);
     return NextResponse.json(
       { error: "Failed to create checkout session" },

@@ -1,7 +1,7 @@
 // WordPress Publisher — WordPress REST API publisher
 // Publishes content to WordPress sites via the REST API
 
-import { type PublishPayload, type PublishResult, type Publisher, registerPublisher } from "./index";
+import { type PublishPayload, type PublishResult, type Publisher } from "./index";
 
 class WordPressPublisher implements Publisher {
   name = "WordPress";
@@ -89,5 +89,4 @@ class WordPressPublisher implements Publisher {
   }
 }
 
-// Register the publisher
-registerPublisher(new WordPressPublisher());
+export default new WordPressPublisher();

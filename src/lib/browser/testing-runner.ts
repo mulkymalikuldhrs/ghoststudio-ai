@@ -3,6 +3,7 @@
 
 import { browserManager } from "./browser-manager";
 import * as interactions from "./page-interactions";
+import sharp from "sharp";
 import type {
   TestConfig,
   TestResult,
@@ -324,13 +325,132 @@ export async function runAccessibilityCheck(
 }
 
 /**
- * Run visual regression test by comparing screenshots
+ * Decode a base64 string to a Buffer
+ */
+function base64ToBuffer(base64: string): Buffer {
+  // Strip data URL prefix if present (e.g. "data:image/png;base64,...")
+  const raw = base64.includes(",")
+    ? base64.split(",")[1]
+    : base64;
+  return Buffer.from(raw, "base64");
+}
+
+/**
+ * Lightweight pixel-level image comparison using sharp.
+ * Decodes both images, resizes to identical dimensions, then compares raw RGBA pixels.
+ */
+async function comparePixels(
+  baselineBuf: Buffer,
+  currentBuf: Buffer,
+  thresholdPercent: number = 5
+): Promise<{
+  diffPercentage: number;
+  totalPixels: number;
+  differentPixels: number;
+  diffImageBase64?: string;
+}> {
+  // Decode both images with sharp to get metadata
+  const baselineMeta = await sharp(baselineBuf).metadata();
+  const currentMeta = await sharp(currentBuf).metadata();
+
+  // Use the smaller dimensions so both images can be resized to match
+  const width = Math.min(baselineMeta.width || 1, currentMeta.width || 1);
+  const height = Math.min(baselineMeta.height || 1, currentMeta.height || 1);
+
+  // Resize both images to the same dimensions and get raw RGBA pixel data
+  const [baselineRaw, currentRaw] = await Promise.all([
+    sharp(baselineBuf)
+      .resize(width, height)
+      .raw()
+      .toBuffer(),
+    sharp(currentBuf)
+      .resize(width, height)
+      .raw()
+      .toBuffer(),
+  ]);
+
+  const totalPixels = width * height;
+  let differentPixels = 0;
+
+  // Build a diff image for visual feedback (RGBA)
+  const diffPixels = Buffer.alloc(width * height * 4);
+
+  // Determine channel count (3 = RGB, 4 = RGBA)
+  const baselineChannels = baselineMeta.channels || 3;
+  const currentChannels = currentMeta.channels || 3;
+  const maxChannels = Math.max(baselineChannels, currentChannels);
+
+  for (let i = 0; i < totalPixels; i++) {
+    const baseOffset = i * maxChannels;
+    const currOffset = i * maxChannels;
+    const diffOffset = i * 4;
+
+    // Get pixel values (default alpha to 255 if not present)
+    const br = baselineRaw[baseOffset] || 0;
+    const bg = baselineRaw[baseOffset + 1] || 0;
+    const bb = baselineRaw[baseOffset + 2] || 0;
+    const ba = baselineChannels === 4 ? (baselineRaw[baseOffset + 3] || 0) : 255;
+
+    const cr = currentRaw[currOffset] || 0;
+    const cg = currentRaw[currOffset + 1] || 0;
+    const cb = currentRaw[currOffset + 2] || 0;
+    const ca = currentChannels === 4 ? (currentRaw[currOffset + 3] || 0) : 255;
+
+    // Pixel is different if any channel differs beyond a small tolerance
+    const tolerance = 3; // small tolerance for anti-aliasing / compression artifacts
+    const isDifferent =
+      Math.abs(br - cr) > tolerance ||
+      Math.abs(bg - cg) > tolerance ||
+      Math.abs(bb - cb) > tolerance ||
+      Math.abs(ba - ca) > tolerance;
+
+    if (isDifferent) {
+      differentPixels++;
+      // Highlight diff pixels in red
+      diffPixels[diffOffset] = 255;     // R
+      diffPixels[diffOffset + 1] = 0;   // G
+      diffPixels[diffOffset + 2] = 0;   // B
+      diffPixels[diffOffset + 3] = 255; // A
+    } else {
+      // Matching pixels: show as semi-transparent gray
+      diffPixels[diffOffset] = br;
+      diffPixels[diffOffset + 1] = bg;
+      diffPixels[diffOffset + 2] = bb;
+      diffPixels[diffOffset + 3] = 128;
+    }
+  }
+
+  const diffPercentage = totalPixels > 0 ? (differentPixels / totalPixels) * 100 : 0;
+
+  // Encode diff image to PNG base64 only if there are differences
+  let diffImageBase64: string | undefined;
+  if (differentPixels > 0) {
+    const diffPng = await sharp(diffPixels, {
+      raw: { width, height, channels: 4 },
+    })
+      .png()
+      .toBuffer();
+    diffImageBase64 = diffPng.toString("base64");
+  }
+
+  return {
+    diffPercentage: Math.round(diffPercentage * 100) / 100,
+    totalPixels,
+    differentPixels,
+    diffImageBase64,
+  };
+}
+
+/**
+ * Run visual regression test by comparing screenshots with pixel-level precision
  */
 export async function runVisualRegression(
   sessionId: string,
-  baselineScreenshot: string
+  baselineScreenshot: string,
+  options: { threshold?: number } = {}
 ): Promise<TestResult> {
   const startTime = Date.now();
+  const threshold = options.threshold ?? 5; // 5% default diff threshold
 
   if (!browserManager.hasSession(sessionId)) {
     return {
@@ -345,28 +465,24 @@ export async function runVisualRegression(
   try {
     const page = browserManager.getPage(sessionId);
 
-    // Take current screenshot
+    // Take current screenshot as PNG for lossless pixel comparison
     const currentScreenshotBuf = await page.screenshot({
-      type: "jpeg",
-      quality: 80,
+      type: "png",
       fullPage: true,
     });
-    const currentBase64 = Buffer.isBuffer(currentScreenshotBuf)
-      ? currentScreenshotBuf.toString("base64")
-      : String(currentScreenshotBuf);
 
-    // Basic pixel comparison using sharp or simple base64 comparison
-    // For a production app, you'd use pixelmatch or similar library
-    // Here we do a basic comparison by checking if screenshots are identical
-    const baselineLength = baselineScreenshot.length;
-    const currentLength = currentBase64.length;
-    const lengthDiff = Math.abs(baselineLength - currentLength);
-    const lengthDiffPercent =
-      baselineLength > 0 ? (lengthDiff / baselineLength) * 100 : 100;
+    // Decode baseline from base64 to buffer
+    const baselineBuf = base64ToBuffer(baselineScreenshot);
 
-    // If sizes differ by more than 5%, consider it a visual change
-    const threshold = 5; // 5% difference threshold
-    const passed = lengthDiffPercent < threshold;
+    // Current screenshot buffer
+    const currentBuf = Buffer.isBuffer(currentScreenshotBuf)
+      ? currentScreenshotBuf
+      : Buffer.from(currentScreenshotBuf);
+
+    // Perform pixel-level comparison
+    const comparison = await comparePixels(baselineBuf, currentBuf, threshold);
+
+    const passed = comparison.diffPercentage < threshold;
 
     return {
       name: "Visual Regression",
@@ -374,15 +490,15 @@ export async function runVisualRegression(
       passed,
       durationMs: Date.now() - startTime,
       details: {
-        baselineSize: baselineLength,
-        currentSize: currentLength,
-        sizeDiffPercent: Math.round(lengthDiffPercent * 100) / 100,
+        diffPercentage: comparison.diffPercentage,
+        totalPixels: comparison.totalPixels,
+        differentPixels: comparison.differentPixels,
         threshold,
-        currentScreenshot: currentBase64.substring(0, 200) + "...", // Truncate for response
+        diffImageBase64: comparison.diffImageBase64,
       },
       error: passed
         ? undefined
-        : `Visual difference detected: ${lengthDiffPercent.toFixed(1)}% size difference (threshold: ${threshold}%)`,
+        : `Visual difference detected: ${comparison.diffPercentage.toFixed(2)}% pixels differ (${comparison.differentPixels}/${comparison.totalPixels}, threshold: ${threshold}%)`,
     };
   } catch (error) {
     return {
@@ -670,7 +786,11 @@ export async function dispatchTest(
           error: "baselineScreenshot is required for visual regression test",
         };
       }
-      return runVisualRegression(sessionId, testConfig.baselineScreenshot);
+      return runVisualRegression(
+        sessionId,
+        testConfig.baselineScreenshot,
+        { threshold: (testConfig.options?.threshold as number) ?? 5 }
+      );
 
     case "link-check":
       return runLinkCheck(sessionId);

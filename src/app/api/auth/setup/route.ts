@@ -1,21 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireAuth } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
 
 // POST /api/auth/setup - Initialize user workspace after first login
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth(request)
 
     const body = await request.json()
     const { name } = body
 
     const user = await db.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: auth.userId },
       include: {
         workspaces: true,
         workspaceMembers: {
@@ -81,6 +77,7 @@ export async function POST(request: NextRequest) {
       workspaces,
     })
   } catch (error) {
+    if (error instanceof NextResponse) return error
     console.error('Auth setup error:', error)
     return NextResponse.json({ error: 'Failed to setup auth' }, { status: 500 })
   }

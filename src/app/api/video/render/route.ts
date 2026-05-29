@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-guard";
 import { db } from "@/lib/db";
 
 // POST /api/video/render - Start a render job
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireAuth(request);
 
     const body = await request.json();
     const { projectId, jobType = "full", configJson = {} } = body;
@@ -33,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify ownership
-    if (project.userId !== session.user.id) {
+    if (project.userId !== auth.userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -54,6 +50,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(renderJob, { status: 201 });
   } catch (error) {
+    if (error instanceof NextResponse) return error;
     console.error("Video render error:", error);
     return NextResponse.json(
       { error: "Failed to create render job" },
