@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-05-30T00:26:26.311085",
+  "master_title": "Masa Depan AI di Indonesia: Antara Peluang dan Kesiapan",
+  "total_variants": 19,
+  "published": [
+    [
+      "telegraph",
+      "https://telegra.ph/AI-di-Indonesia-2025-Peluang-Tantangan--Kesiapan-Nasional-05-29-6"
+    ],
+    [
+      "writeas",
+      "https://write.as/d0m9see4h66y2cav.md"
+    ]
+  ],
+  "skipped": [
+    [
+      "bearblog",
+      "Request failed: Expecting value: line 1 column 1 (char 0)"
+    ],
+    [
+      "beehiiv",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "blogger",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "devto",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "ghost",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "hashnode",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "hubpages",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "instagram",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "lokal",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "medium",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "mirrorxyz",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "steemit",
+      "Assert Exception:( now - auth.last_root_post ) > STEEM_MIN_ROOT_COMMENT_INTERVAL: You may only post once every 5 minutes."
+    ],
+    [
+      "substack",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "tiktok",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "vocal",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "wordpress",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "youtube",
+      "no credentials in engine_config.json"
+    ]
+  ],
+  "output_dir": "/home/mulky/Desktop/ghoststudio-ai/engine/scripts/../output"
+}
