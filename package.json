@@ -2,7 +2,7 @@
   "name": "ghoststudio-ai",
   "version": "2.0.0",
   "private": true,
-  "description": "GhostStudio AI — The Autonomous Media Operating System. 24+ AI Agents, True Loop Pipeline, Content DNA Engine, Video Generation, Heatmap Analytics, Browser Automation, Financial Management. Merged from GhostStudio AI + AI Media Intelligence OS.",
+  "description": "GhostStudio AI — All-in-One Autonomous Media OS: Next.js frontend, Python autonomous engine, 19+ platform publishers, AI content gen, faceless video.",
   "author": "Mulky Malikul Dhaher <mulkymalikuldhaher@email.com>",
   "license": "MIT",
   "scripts": {

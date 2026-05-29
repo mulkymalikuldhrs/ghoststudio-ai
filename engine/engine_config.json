@@ -1,0 +1,103 @@
+{
+  "openrouter_api_key": "",
+  "openrouter_model": "openai/gpt-4o",
+  "openrouter_base_url": "https://openrouter.ai/api/v1",
+  "workspace_id": "default",
+  "automation_mode": "semi",
+  "default_language": "id",
+  "default_tone": "professional",
+  "max_articles_per_run": 5,
+  "max_retries": 3,
+  "retry_delay_seconds": 10,
+  "budget_limits": {
+    "daily_api_calls": 100,
+    "daily_publishes": 20,
+    "monthly_api_budget_usd": 50.0
+  },
+  "failsafe": {
+    "safe_mode": true,
+    "review_mode": true,
+    "dry_run": false,
+    "error_threshold": 5,
+    "quality_gate_enabled": true,
+    "quality_min_score": 0.6,
+    "duplicate_detection": true,
+    "rate_limit_per_minute": 10,
+    "budget_limiter": true
+  },
+  "credentials": {
+    "wordpress": {
+      "url": "",
+      "username": "",
+      "password": ""
+    },
+    "medium": {
+      "token": ""
+    },
+    "blogger": {
+      "access_token": "",
+      "blog_id": ""
+    },
+    "substack": {
+      "cookie": "",
+      "subdomain": ""
+    },
+    "beehiiv": {
+      "api_key": "",
+      "publication_id": ""
+    },
+    "devto": {
+      "api_key": ""
+    },
+    "hashnode": {
+      "api_key": "",
+      "publication_id": ""
+    },
+    "ghost": {
+      "url": "",
+      "admin_api_key": ""
+    },
+    "mirrorxyz": {
+      "api_key": "",
+      "project_id": ""
+    },
+    "writeas": {
+      "token": "",
+      "collection": ""
+    },
+    "bearblog": {
+      "token": "",
+      "domain": ""
+    },
+    "hubpages": {
+      "email": "",
+      "password": ""
+    },
+    "vocal": {
+      "email": "",
+      "password": ""
+    },
+    "telegraph": {},
+    "steemit": {
+      "posting_key": "",
+      "username": ""
+    },
+    "lokal": {
+      "url": ""
+    },
+    "tiktok": {
+      "email": "",
+      "password": ""
+    },
+    "youtube": {
+      "access_token": ""
+    },
+    "instagram": {
+      "username": "",
+      "password": ""
+    }
+  },
+  "memory_db_path": "~/Desktop/ai-media-engine/data/memory.db",
+  "scheduler_db_path": "~/Desktop/ai-media-engine/data/scheduler.db",
+  "log_level": "INFO"
+}
