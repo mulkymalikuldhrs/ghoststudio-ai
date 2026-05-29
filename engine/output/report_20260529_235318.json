@@ -1,0 +1,85 @@
+{
+  "timestamp": "2026-05-29T23:53:18.325568",
+  "master_title": "Masa Depan AI di Indonesia: Antara Peluang dan Kesiapan",
+  "total_variants": 19,
+  "published": [],
+  "skipped": [
+    [
+      "telegraph",
+      "API error: ACCOUNT_NOT_FOUND"
+    ],
+    [
+      "bearblog",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "beehiiv",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "blogger",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "devto",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "ghost",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "hashnode",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "hubpages",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "instagram",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "lokal",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "medium",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "mirrorxyz",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "steemit",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "substack",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "tiktok",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "vocal",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "wordpress",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "writeas",
+      "no credentials in engine_config.json"
+    ],
+    [
+      "youtube",
+      "no credentials in engine_config.json"
+    ]
+  ],
+  "output_dir": "/home/mulky/Desktop/ghoststudio-ai/engine/scripts/../output"
+}

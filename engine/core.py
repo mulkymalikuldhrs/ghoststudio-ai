@@ -354,8 +354,8 @@ class AIMediaEngine:
 
     def _score_content(self, content, platform, keywords=None):
         """Score content quality."""
-        scores, _, _, err = self.scorer.score_content(content, platform, keywords)
-        if err or not scores:
+        scores = self.scorer.score_content(content, platform, keywords)
+        if not scores:
             return {"overall_score": 0.6}
         return scores
 

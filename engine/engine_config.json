@@ -1,7 +1,7 @@
 {
-  "openrouter_api_key": "605b98038c231462c768a3bee575ecea2df6ecad8c988eb73171129726fe7537",
-  "openrouter_model": "mistralai/Mixtral-8x22B-Instruct-v0.1",
-  "openrouter_base_url": "https://api.together.xyz/v1",
+  "openrouter_api_key": "sk-Amc...m7N3",
+  "openrouter_model": "deepseek-v4-flash-free",
+  "openrouter_base_url": "https://opencode.ai/zen/v1",
   "workspace_id": "default",
   "automation_mode": true,
   "batch_publish": true,
@@ -19,7 +19,7 @@
   "scheduler_db_path": "/home/mulky/Desktop/ghoststudio-ai/engine/data/scheduler.db",
   "credentials": {
     "telegraph": {
-      "access_token": "3f1f5e1b5c25b959db59cef1abac19cd78f0393ee3d62cbb366594d196ec"
+      "access_token": "0972aeec7747ee191de8298d2dca5446c01d3418fb5897af588a1a63b27d"
     },
     "medium": {
       "token": ""
