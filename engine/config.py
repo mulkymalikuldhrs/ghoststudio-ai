@@ -8,7 +8,7 @@ import json
 import threading
 from pathlib import Path
 
-CONFIG_PATH = os.path.expanduser("~/Desktop/ai-media-engine/engine_config.json")
+CONFIG_PATH = os.path.expanduser("~/Desktop/ghoststudio-ai/engine/engine_config.json")
 _lock = threading.Lock()
 _cache = None
 

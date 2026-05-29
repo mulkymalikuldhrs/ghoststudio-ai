@@ -1,0 +1,8 @@
+{
+  "platform": "devto",
+  "title": "AI in Indonesia 2025: A Developer's Perspective",
+  "body": "## Why Indonesia Matters for AI\n\nAs a developer, Indonesia deserves your attention: 280M people, 4th largest population globally, fastest-growing digital economy. It's both a massive market and a unique testbed for AI solutions.\n\n### Market Opportunity\n\nIndonesia's digital economy is projected to reach $130B by 2025. AI is the primary accelerator. Gojek uses ML for route optimization, Bukalapak for recommendations, fintechs for fraud detection.\n\n### The Developer Reality\n\n**Talent gap**: 600K digital talents needed annually, only 200K produced. Demand far exceeds supply.\n\n**Infrastructure**: Only 65% of regions have stable internet. Edge AI and offline-first ML models are essential, not optional.\n\n### Tech Stack for Indonesia\n- **Edge**: TensorFlow Lite, ONNX Runtime\n- **Cloud**: Google Cloud Indonesia (Jakarta region)\n- **NLP**: IndoBERT, IndoLEM for Bahasa Indonesia\n- **Deployment**: Railway, Vercel for APIs\n\n## What Developers Can Do\n\n1. Build for low-bandwidth environments\n2. Focus on Indonesian-language NLP (Bahasa models are scarce)\n3. Contribute to open-source AI for emerging markets\n4. Join PyData Jakarta or Indonesia AI communities",
+  "word_count": 167,
+  "generated_at": "2026-05-29T19:44:26.018909",
+  "status": "ready_to_publish"
+}

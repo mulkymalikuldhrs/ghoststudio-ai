@@ -1,41 +1,42 @@
 {
-  "openrouter_api_key": "",
-  "openrouter_model": "openai/gpt-4o",
-  "openrouter_base_url": "https://openrouter.ai/api/v1",
+  "openrouter_api_key": "605b98038c231462c768a3bee575ecea2df6ecad8c988eb73171129726fe7537",
+  "openrouter_model": "mistralai/Mixtral-8x22B-Instruct-v0.1",
+  "openrouter_base_url": "https://api.together.xyz/v1",
   "workspace_id": "default",
-  "automation_mode": "semi",
-  "default_language": "id",
-  "default_tone": "professional",
-  "max_articles_per_run": 5,
-  "max_retries": 3,
-  "retry_delay_seconds": 10,
-  "budget_limits": {
-    "daily_api_calls": 100,
-    "daily_publishes": 20,
-    "monthly_api_budget_usd": 50.0
-  },
-  "failsafe": {
-    "safe_mode": true,
-    "review_mode": true,
-    "dry_run": false,
-    "error_threshold": 5,
-    "quality_gate_enabled": true,
-    "quality_min_score": 0.6,
-    "duplicate_detection": true,
-    "rate_limit_per_minute": 10,
-    "budget_limiter": true
-  },
+  "automation_mode": true,
+  "batch_publish": true,
+  "sequential_publish": true,
+  "use_orm": false,
+  "max_retries": 4,
+  "retry_delay": 90,
+  "max_publishers": 3,
+  "safe_mode": false,
+  "review_mode": false,
+  "quality_threshold": 40,
+  "max_publish_sessions": 10,
+  "log_level": "INFO",
+  "memory_db_path": "/home/mulky/Desktop/ghoststudio-ai/engine/data/memory.db",
+  "scheduler_db_path": "/home/mulky/Desktop/ghoststudio-ai/engine/data/scheduler.db",
   "credentials": {
+    "telegraph": {
+      "access_token": "3f1f5e1b5c25b959db59cef1abac19cd78f0393ee3d62cbb366594d196ec"
+    },
+    "medium": {
+      "token": ""
+    },
+    "devto": {
+      "api_key": ""
+    },
+    "hashnode": {
+      "token": ""
+    },
     "wordpress": {
       "url": "",
       "username": "",
       "password": ""
     },
-    "medium": {
-      "token": ""
-    },
     "blogger": {
-      "access_token": "",
+      "api_key": "",
       "blog_id": ""
     },
     "substack": {
@@ -46,58 +47,48 @@
       "api_key": "",
       "publication_id": ""
     },
-    "devto": {
+    "ghost": {
+      "api_url": "",
       "api_key": ""
     },
-    "hashnode": {
-      "api_key": "",
-      "publication_id": ""
-    },
-    "ghost": {
-      "url": "",
-      "admin_api_key": ""
-    },
     "mirrorxyz": {
-      "api_key": "",
-      "project_id": ""
+      "wallet_private_key": "",
+      "contract_address": ""
     },
     "writeas": {
-      "token": "",
-      "collection": ""
+      "token": ""
     },
     "bearblog": {
-      "token": "",
-      "domain": ""
+      "username": "",
+      "password": ""
     },
     "hubpages": {
-      "email": "",
+      "username": "",
       "password": ""
     },
     "vocal": {
       "email": "",
       "password": ""
     },
-    "telegraph": {},
     "steemit": {
       "posting_key": "",
       "username": ""
     },
     "lokal": {
-      "url": ""
-    },
-    "tiktok": {
       "email": "",
       "password": ""
     },
+    "tiktok": {
+      "session_id": "",
+      "csrf_token": ""
+    },
     "youtube": {
-      "access_token": ""
+      "access_token": "",
+      "refresh_token": ""
     },
     "instagram": {
       "username": "",
       "password": ""
     }
-  },
-  "memory_db_path": "~/Desktop/ai-media-engine/data/memory.db",
-  "scheduler_db_path": "~/Desktop/ai-media-engine/data/scheduler.db",
-  "log_level": "INFO"
+  }
 }
