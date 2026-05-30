@@ -67,6 +67,8 @@ model Workspace {
   suggestions     Suggestion[]
   agentLogs       AgentLog[]
   energyEntries   EnergyEntry[]
+  heatmapClipJobs HeatmapClipJob[]
+  tikTokCampaigns TikTokCampaign[]
 
   @@index([ownerId])
   @@index([slug])
@@ -131,6 +133,7 @@ model ContentItem {
   seoData             SeoData?
   contentTags         ContentTag[]
 
+  @@unique([workspaceId, slug])
   @@index([workspaceId])
   @@index([status])
   @@index([slug])
@@ -539,8 +542,10 @@ model HeatmapClipJob {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace      Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([workspaceId])
   @@index([status])
   @@index([videoId])
 }
@@ -571,6 +576,7 @@ model TikTokCampaign {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace      Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([workspaceId])
@@ -617,7 +623,7 @@ model Task {
   status            String    @default("todo") // todo, in_progress, done, blocked, cancelled
   timeCost          Int       @default(0) // estimated minutes
   energyCost        Int       @default(0) // 1-10
-  moneyCost         Float     @default(0) // estimated cost in dollars
+  moneyCost         Decimal   @default(0) // estimated cost in dollars
   priority          String    @default("medium") // low, medium, high, critical
   assignedTo        String?   // userId of assigned member
   dependencies      String?   // JSON: array of task IDs this depends on
@@ -645,7 +651,7 @@ model FinanceAccount {
   workspaceId String
   name        String
   type        String    @default("checking") // checking, savings, investment, cash, credit
-  balance     Float     @default(0)
+  balance     Decimal     @default(0)
   currency    String    @default("USD")
   isEmergency Boolean   @default(false)
   createdAt   DateTime  @default(now())
@@ -665,7 +671,7 @@ model Transaction {
   id           String         @id @default(cuid())
   workspaceId  String
   accountId    String?
-  amount       Float          @default(0)
+  amount       Decimal          @default(0)
   category     String         @default("other") // salary, freelance, investment, food, transport, housing, entertainment, utilities, other
   type         String         @default("expense") // income, expense, transfer
   description  String?
@@ -691,7 +697,7 @@ model BudgetRule {
   id          String    @id @default(cuid())
   workspaceId String
   category    String
-  limitAmount Float     @default(0)
+  limitAmount Decimal     @default(0)
   period      String    @default("monthly") // weekly, monthly, yearly
   priority    String    @default("medium") // low, medium, high
   isActive    Boolean   @default(true)
@@ -712,8 +718,8 @@ model FinancialGoal {
   id            String    @id @default(cuid())
   workspaceId   String
   name          String
-  targetAmount  Float     @default(0)
-  currentAmount Float     @default(0)
+  targetAmount  Decimal     @default(0)
+  currentAmount Decimal     @default(0)
   deadline      DateTime?
   priority      String    @default("medium") // low, medium, high
   createdAt     DateTime  @default(now())

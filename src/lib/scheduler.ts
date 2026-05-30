@@ -556,16 +556,41 @@ export async function runDailyCycle(workspaceId: string): Promise<{
         status: 'ready',
         qualityScore: { gte: 80 },
       },
+      include: {
+        variants: {
+          where: { status: 'ready' },
+          select: { platform: true },
+          take: 1,
+        },
+      },
       take: 10,
     });
+
+    // Determine platform from content variants or workspace settings
+    let defaultPlatform = 'wordpress';
+    try {
+      const workspace = await db.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { settingsJson: true },
+      });
+      if (workspace?.settingsJson) {
+        const settings = JSON.parse(workspace.settingsJson);
+        if (settings?.defaultPlatform) {
+          defaultPlatform = settings.defaultPlatform;
+        }
+      }
+    } catch {
+      // Fall back to wordpress if settings can't be parsed
+    }
 
     for (const content of readyContent) {
       try {
         const scheduledTime = new Date(Date.now() + 2 * 60 * 60 * 1000);
+        const platform = content.variants?.[0]?.platform || defaultPlatform;
         await scheduleContent({
           workspaceId,
           contentId: content.id,
-          platform: 'wordpress',
+          platform,
           scheduledTime,
         });
         contentScheduled++;

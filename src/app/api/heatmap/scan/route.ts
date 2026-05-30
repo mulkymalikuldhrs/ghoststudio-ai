@@ -7,10 +7,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
 import { getHeatmapClipperUrl, proxyRequest } from "@/lib/python-engines";
 import { db } from "@/lib/db";
+import { z } from "zod";
+
+const heatmapScanSchema = z.object({
+  videoUrl: z.string().url().optional(),
+  resolution: z.enum(["720p", "1080p", "4k"]).optional(),
+}).passthrough();
 
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
+
+    // Validate body
+    const body = await request.json();
+    const validation = heatmapScanSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: "Invalid request parameters", details: validation.error.issues },
+        { status: 400 }
+      );
+    }
 
     const targetUrl = `${getHeatmapClipperUrl()}/api/scan`;
     const response = await proxyRequest(request, targetUrl);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 
 export async function POST(
   request: NextRequest,
@@ -30,7 +31,7 @@ export async function POST(
         description: description || null,
         timeCost: timeCost || 0,
         energyCost: energyCost || 0,
-        moneyCost: moneyCost || 0,
+        moneyCost: new Prisma.Decimal(moneyCost || 0),
         priority: priority || 'medium',
         assignedTo: assignedTo || null,
         dependencies: dependencies ? (typeof dependencies === 'object' ? JSON.stringify(dependencies) : dependencies) : null,
@@ -38,7 +39,7 @@ export async function POST(
       },
     })
 
-    return NextResponse.json({ task }, { status: 201 })
+    return NextResponse.json({ task: { ...task, moneyCost: task.moneyCost.toString() } }, { status: 201 })
   } catch (error) {
     if (error instanceof NextResponse) return error
     console.error('Create task error:', error)

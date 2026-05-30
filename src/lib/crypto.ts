@@ -17,13 +17,25 @@ const KEY_LENGTH = 32
 
 /**
  * Resolve the encryption salt from the ENCRYPTION_SALT environment variable.
- * Backward-compatible: if ENCRYPTION_SALT is not set, falls back to the
- * previously hardcoded value 'ghoststudio-salt' so existing encrypted data
- * remains decryptable. In production, always set ENCRYPTION_SALT to a
- * unique, cryptographically random value.
+ * SECURITY: In production (NODE_ENV=production), ENCRYPTION_SALT MUST be set.
+ * In development, falls back to a known value for convenience but logs a warning.
  */
 function getEncryptionSalt(): string {
-  return process.env.ENCRYPTION_SALT || 'ghoststudio-salt'
+  const salt = process.env.ENCRYPTION_SALT
+  if (salt) return salt
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[Encryption] FATAL: ENCRYPTION_SALT environment variable is not set. ' +
+      'Refusing to use a fallback in production. Generate one with: openssl rand -hex 16'
+    )
+  }
+
+  console.warn(
+    '[Encryption] WARNING: ENCRYPTION_SALT is not set. Using development fallback. ' +
+    'This is insecure — set ENCRYPTION_SALT before deploying.'
+  )
+  return 'ghoststudio-salt-dev-only'
 }
 
 function getEncryptionKey(): Buffer {
@@ -31,8 +43,25 @@ function getEncryptionKey(): Buffer {
   const salt = getEncryptionSalt()
 
   if (!secret) {
-    // In development, use a derived key from NEXTAUTH_SECRET as fallback
-    const fallback = process.env.NEXTAUTH_SECRET || 'dev-only-fallback-key-do-not-use-in-prod'
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        '[Encryption] FATAL: ENCRYPTION_KEY environment variable is not set. ' +
+        'Refusing to use a fallback in production. Generate one with: openssl rand -hex 32'
+      )
+    }
+
+    // In development, fall back to NEXTAUTH_SECRET
+    const fallback = process.env.NEXTAUTH_SECRET
+    if (!fallback) {
+      throw new Error(
+        '[Encryption] FATAL: Neither ENCRYPTION_KEY nor NEXTAUTH_SECRET is set. ' +
+        'At least one must be configured. Generate ENCRYPTION_KEY with: openssl rand -hex 32'
+      )
+    }
+    console.warn(
+      '[Encryption] WARNING: ENCRYPTION_KEY is not set. Deriving from NEXTAUTH_SECRET as fallback. ' +
+      'This is insecure — set ENCRYPTION_KEY before deploying.'
+    )
     return scryptSync(fallback, salt, KEY_LENGTH)
   }
   // If the key is a hex string, use it directly

@@ -314,6 +314,73 @@ export class MemorySystem {
       }
     }
   }
+
+  // Clean up expired memories — removes or deactivates memories past their expiration
+  async cleanupExpired(): Promise<{ deactivated: number; deleted: number }> {
+    const now = new Date()
+
+    // Deactivate expired short-term Memory model entries
+    const { count: deactivated } = await db.memory.updateMany({
+      where: {
+        workspaceId: this.workspaceId,
+        layer: 'short_term',
+        expiresAt: { lt: now },
+      },
+      data: {
+        expiresAt: null,
+        layer: 'long_term', // Promote to long-term instead of losing data
+      },
+    })
+
+    // Delete truly old expired memories (older than 90 days past expiration)
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+    const { count: deleted } = await db.memory.deleteMany({
+      where: {
+        workspaceId: this.workspaceId,
+        expiresAt: { lt: ninetyDaysAgo },
+      },
+    })
+
+    return { deactivated, deleted }
+  }
+}
+
+// ─── Global cleanup function for expired memories ─────────────────────────────
+
+export async function cleanupExpiredMemories(
+  workspaceId?: string
+): Promise<{ deactivated: number; deleted: number }> {
+  const now = new Date()
+  const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+
+  const whereBase = {
+    layer: 'short_term' as const,
+    expiresAt: { lt: now },
+  }
+
+  const where = workspaceId
+    ? { ...whereBase, workspaceId }
+    : whereBase
+
+  // Deactivate expired memories by promoting them to long-term
+  const { count: deactivated } = await db.memory.updateMany({
+    where,
+    data: {
+      expiresAt: null,
+      layer: 'long_term',
+    },
+  })
+
+  // Delete truly old expired memories (older than 90 days past expiration)
+  const deleteWhere = workspaceId
+    ? { workspaceId, expiresAt: { lt: ninetyDaysAgo } }
+    : { expiresAt: { lt: ninetyDaysAgo } }
+
+  const { count: deleted } = await db.memory.deleteMany({
+    where: deleteWhere,
+  })
+
+  return { deactivated, deleted }
 }
 
 // ─── Singleton factory with LRU eviction ──────────────────────────────────────

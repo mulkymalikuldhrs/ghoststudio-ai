@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 
 export async function PATCH(
   request: NextRequest,
@@ -38,7 +39,7 @@ export async function PATCH(
         ...(description !== undefined && { description }),
         ...(timeCost !== undefined && { timeCost }),
         ...(energyCost !== undefined && { energyCost }),
-        ...(moneyCost !== undefined && { moneyCost }),
+        ...(moneyCost !== undefined && { moneyCost: new Prisma.Decimal(moneyCost) }),
         ...(priority !== undefined && { priority }),
         ...(assignedTo !== undefined && { assignedTo }),
         ...(dependencies !== undefined && {

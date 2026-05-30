@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 
 export async function POST(
   request: NextRequest,
@@ -27,14 +28,14 @@ export async function POST(
       data: {
         workspaceId,
         name,
-        targetAmount: parseFloat(targetAmount),
-        currentAmount: currentAmount ? parseFloat(currentAmount) : 0,
+        targetAmount: new Prisma.Decimal(targetAmount),
+        currentAmount: currentAmount ? new Prisma.Decimal(currentAmount) : new Prisma.Decimal(0),
         deadline: deadline ? new Date(deadline) : null,
         priority: priority || 'medium',
       },
     })
 
-    return NextResponse.json({ goal }, { status: 201 })
+    return NextResponse.json({ goal: { ...goal, targetAmount: goal.targetAmount.toString(), currentAmount: goal.currentAmount.toString() } }, { status: 201 })
   } catch (error) {
     if (error instanceof NextResponse) return error
     console.error('Create financial goal error:', error)

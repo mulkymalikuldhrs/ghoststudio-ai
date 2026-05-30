@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
+import { z } from 'zod'
+
+const patchWorkspaceSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  type: z.enum(['personal', 'family', 'team', 'agency']).optional(),
+  autonomousLevel: z.number().min(1).max(5).optional(),
+})
 
 export async function GET(
   request: NextRequest,
@@ -60,7 +67,11 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { name, type, autonomousLevel } = body
+    const validation = patchWorkspaceSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Invalid request', details: validation.error.issues }, { status: 400 })
+    }
+    const { name, type, autonomousLevel } = validation.data
 
     const existing = await db.workspace.findUnique({ where: { id } })
     if (!existing) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 
 export async function POST(
   request: NextRequest,
@@ -28,13 +29,13 @@ export async function POST(
         workspaceId,
         name,
         type: type || 'checking',
-        balance: balance || 0,
+        balance: new Prisma.Decimal(balance || 0),
         currency: currency || 'USD',
         isEmergency: isEmergency || false,
       },
     })
 
-    return NextResponse.json({ account }, { status: 201 })
+    return NextResponse.json({ account: { ...account, balance: account.balance.toString() } }, { status: 201 })
   } catch (error) {
     if (error instanceof NextResponse) return error
     console.error('Create account error:', error)

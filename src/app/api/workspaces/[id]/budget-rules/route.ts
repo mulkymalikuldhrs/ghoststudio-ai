@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 
 export async function POST(
   request: NextRequest,
@@ -27,14 +28,14 @@ export async function POST(
       data: {
         workspaceId,
         category,
-        limitAmount: parseFloat(limitAmount),
+        limitAmount: new Prisma.Decimal(limitAmount),
         period: period || 'monthly',
         priority: priority || 'medium',
         isActive: isActive !== undefined ? isActive : true,
       },
     })
 
-    return NextResponse.json({ rule }, { status: 201 })
+    return NextResponse.json({ rule: { ...rule, limitAmount: rule.limitAmount.toString() } }, { status: 201 })
   } catch (error) {
     if (error instanceof NextResponse) return error
     console.error('Create budget rule error:', error)

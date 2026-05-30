@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireWorkspaceAccess } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 
 export async function POST(
   request: NextRequest,
@@ -27,7 +28,7 @@ export async function POST(
       data: {
         workspaceId,
         accountId: accountId || null,
-        amount: parseFloat(amount),
+        amount: new Prisma.Decimal(amount),
         category: category || 'other',
         type: type || 'expense',
         description: description || null,
@@ -37,14 +38,14 @@ export async function POST(
     })
 
     if (accountId) {
-      const increment = type === 'income' ? parseFloat(amount) : -parseFloat(amount)
+      const increment = type === 'income' ? new Prisma.Decimal(amount) : new Prisma.Decimal(amount).negated()
       await db.financeAccount.update({
         where: { id: accountId },
         data: { balance: { increment } },
       })
     }
 
-    return NextResponse.json({ transaction }, { status: 201 })
+    return NextResponse.json({ transaction: { ...transaction, amount: transaction.amount.toString() } }, { status: 201 })
   } catch (error) {
     if (error instanceof NextResponse) return error
     console.error('Create transaction error:', error)

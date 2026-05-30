@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-guard";
 import { browserManager } from "@/lib/browser/browser-manager";
 import { z } from "zod";
 
@@ -22,13 +21,7 @@ const createSessionSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuth(request);
 
     const body = await request.json();
     const parsed = createSessionSchema.safeParse(body);
@@ -44,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     const options = parsed.data;
-    const userId = (session.user as { id?: string })?.id || session.user?.email || undefined;
+    const userId = auth.userId;
     const browserSession = await browserManager.createSession({ ...options, userId });
 
     return NextResponse.json(
@@ -55,6 +48,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof NextResponse) return error;
     console.error("Browser session creation error:", error);
 
     if (
@@ -72,18 +66,11 @@ export async function POST(request: NextRequest) {
 }
 
 // GET /api/browser — List all active browser sessions
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
-    }
-
-    const userId = (session.user as { id?: string })?.id || session.user?.email;
+    const auth = await requireAuth(request);
+    const userId = auth.userId;
     // Only list sessions owned by this user
     const status = browserManager.getStatus();
     const userSessions = status.sessions.filter(
@@ -98,6 +85,7 @@ export async function GET() {
       uptime: status.uptime,
     });
   } catch (error) {
+    if (error instanceof NextResponse) return error;
     console.error("Browser sessions list error:", error);
     return NextResponse.json(
       { error: "Failed to list browser sessions" },
