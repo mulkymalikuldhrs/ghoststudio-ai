@@ -58,10 +58,10 @@ export async function POST(request: NextRequest) {
       })),
     }
 
-    const totalBalance = workspace.accounts.reduce((sum, a) => sum + a.balance, 0)
-    const emergencyFunds = workspace.accounts.filter((a) => a.isEmergency).reduce((sum, a) => sum + a.balance, 0)
-    const totalExpenses = workspace.transactions.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
-    const totalIncome = workspace.transactions.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
+    const totalBalance = workspace.accounts.reduce((sum, a) => sum + Number(a.balance), 0)
+    const emergencyFunds = workspace.accounts.filter((a) => a.isEmergency).reduce((sum, a) => sum + Number(a.balance), 0)
+    const totalExpenses = workspace.transactions.filter((t) => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0)
+    const totalIncome = workspace.transactions.filter((t) => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0)
 
     const auditPrompt = `Perform a comprehensive financial audit for this workspace.
 
