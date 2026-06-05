@@ -62,3 +62,4 @@ dist/
 engine/data/
 __pycache__/
 *.pyc
+venv_tmp/
