@@ -3,11 +3,12 @@
 # =============================================================================
 
 # Dependencies
-node_modules
+node_modules/
 
 # Next.js build output
-.next
-out
+.next/
+out/
+dist/
 
 # Environment files
 .env
@@ -18,55 +19,69 @@ out
 .env.production
 .env.production.local
 .env*.local
+.env.example
 
 # Database (SQLite dev)
 dev.db
+*.db
 *.db-journal
+*.db-wal
+*.db-shm
 
 # Logs
 dev.log
 server.log
+npm-debug.log*
 
 # Prisma migrations (generated locally)
 prisma/migrations/
 
+# TypeScript build info
+tsconfig.tsbuildinfo
+
 # IDE
-.vscode
-.idea
+.vscode/
+.idea/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Debug
-npm-debug.log*
-
 # Coverage
-coverage
-.nyc_output
+coverage/
+.nyc_output/
 
 # Vercel
-.vercel
-node_modules/
-.next/
-.env
-.env.local
-.env*.local
-*.db
-*.db-journal
-dev.log
-server.log
-prisma/migrations/
-skills/
-dist/
-.turbo/
-.DS_Store
+.vercel/
 
+# Turbo
+.turbo/
+
+# Python engines
 engine/data/
 __pycache__/
 *.pyc
+*.pyo
 venv_tmp/
 venv/
+*.egg-info/
 
 # Replit
 .replit
+
+# Security - never commit these
+*.pem
+*.crt
+*.key
+*.p12
+*.jks
+
+# Upload directory (large binary files - use object storage)
+upload/*.docx
+upload/*.xlsx
+upload/*.pdf
+upload/*.jpg
+upload/*.zip
+
+# Temp files
+temp/

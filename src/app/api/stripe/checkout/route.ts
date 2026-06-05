@@ -1,18 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-guard";
 import { db } from "@/lib/db";
-import Stripe from "stripe";
-
-const stripeKey = process.env.STRIPE_SECRET_KEY || "";
-
-let _stripe: Stripe | null = null;
-function getStripe(): Stripe {
-  if (!_stripe) {
-    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not configured");
-    _stripe = new Stripe(stripeKey);
-  }
-  return _stripe;
-}
+import { getStripe } from "@/lib/stripe";
 
 const PLAN_PRICES: Record<string, string> = {
   creator: process.env.STRIPE_CREATOR_PRICE_ID || "",

@@ -39,7 +39,7 @@ services:
     environment:
       POSTGRES_DB: ghoststudio
       POSTGRES_USER: ghoststudio
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ghoststudio_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before deploying}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

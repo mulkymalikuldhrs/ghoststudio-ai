@@ -1,18 +1,34 @@
 import { db } from '../src/lib/db';
+import { hashPassword } from '../src/lib/auth';
 
 async function main() {
   console.log('🌱 Seeding AI Media Intelligence OS...');
 
+  // SECURITY WARNING: The default seed user has no password and cannot log in
+  // via credentials. Use the signup endpoint to create a real user, or set
+  // SEED_USER_PASSWORD env var to create a user with a known password.
+  const seedPassword = process.env.SEED_USER_PASSWORD;
+
   // Create default user
+  const userData: Record<string, unknown> = {
+    email: 'operator@media-os.local',
+    name: 'Media Operator',
+    role: 'operator',
+    automationMode: 'semi_auto',
+    plan: 'free',
+  };
+
+  if (seedPassword) {
+    userData.password = await hashPassword(seedPassword);
+    console.log('⚠️  Seed user created with SEED_USER_PASSWORD — change this in production!');
+  } else {
+    console.log('ℹ️  Seed user created without password — use /api/auth/signup to create a login-enabled user');
+  }
+
   const user = await db.user.upsert({
     where: { email: 'operator@media-os.local' },
     update: {},
-    create: {
-      email: 'operator@media-os.local',
-      name: 'Media Operator',
-      role: 'operator',
-      automationMode: 'semi_auto',
-    },
+    create: userData,
   });
 
   console.log(`✅ User created: ${user.email}`);

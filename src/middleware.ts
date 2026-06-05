@@ -41,11 +41,20 @@ function checkRateLimit(
   return { allowed: true, remaining: maxRequests - record.count };
 }
 
-// Cleanup old entries periodically
+// Cleanup old entries periodically and cap map size
 setInterval(() => {
   const now = Date.now();
   for (const [key, record] of rateLimitMap.entries()) {
     if (now > record.resetTime) {
+      rateLimitMap.delete(key);
+    }
+  }
+  // Cap the map size to prevent memory exhaustion
+  if (rateLimitMap.size > 10000) {
+    // Delete oldest entries (those with earliest resetTime)
+    const entries = [...rateLimitMap.entries()].sort((a, b) => a[1].resetTime - b[1].resetTime);
+    const toDelete = entries.slice(0, rateLimitMap.size - 5000);
+    for (const [key] of toDelete) {
       rateLimitMap.delete(key);
     }
   }

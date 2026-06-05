@@ -310,8 +310,9 @@ class BrowserManager {
   isSessionOwner(sessionId: string, userId: string): boolean {
     const entry = this.sessions.get(sessionId);
     if (!entry) return false;
-    // If no userId was set on session (legacy), allow access
-    if (!entry.userId) return true;
+    // SECURITY: Legacy sessions without userId are no longer accessible
+    // to prevent IDOR. All sessions must have a userId set at creation.
+    if (!entry.userId) return false;
     return entry.userId === userId;
   }
 

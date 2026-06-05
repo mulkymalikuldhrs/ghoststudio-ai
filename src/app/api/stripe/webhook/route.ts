@@ -1,18 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import Stripe from "stripe";
-
-const stripeKey = process.env.STRIPE_SECRET_KEY || "";
-
-// Lazy init to avoid build-time crash when STRIPE_SECRET_KEY is empty
-let _stripe: Stripe | null = null;
-function getStripe(): Stripe {
-  if (!_stripe) {
-    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not configured");
-    _stripe = new Stripe(stripeKey);
-  }
-  return _stripe;
-}
+import { getStripe } from "@/lib/stripe";
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
 

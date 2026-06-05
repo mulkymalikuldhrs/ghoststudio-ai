@@ -27,10 +27,10 @@ export async function POST(request: NextRequest) {
     const parsed = createSessionSchema.safeParse(body);
 
     if (!parsed.success) {
+      const firstError = parsed.error.issues[0];
       return NextResponse.json(
         {
-          error: "Invalid request parameters",
-          details: parsed.error.issues,
+          error: firstError?.message || "Invalid request parameters",
         },
         { status: 400 }
       );

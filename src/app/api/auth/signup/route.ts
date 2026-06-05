@@ -103,8 +103,9 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
+      const firstError = error.issues[0];
       return NextResponse.json(
-        { error: "Validation failed", details: error.issues },
+        { error: firstError?.message || "Validation failed" },
         { status: 400 }
       );
     }

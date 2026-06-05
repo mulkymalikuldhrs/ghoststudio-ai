@@ -69,7 +69,8 @@ export async function PATCH(
     const body = await request.json()
     const validation = patchWorkspaceSchema.safeParse(body)
     if (!validation.success) {
-      return NextResponse.json({ error: 'Invalid request', details: validation.error.issues }, { status: 400 })
+      const firstError = validation.error.issues[0];
+      return NextResponse.json({ error: firstError?.message || 'Invalid request' }, { status: 400 })
     }
     const { name, type, autonomousLevel } = validation.data
 

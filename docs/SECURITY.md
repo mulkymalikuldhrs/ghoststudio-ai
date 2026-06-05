@@ -216,11 +216,17 @@ All API responses sanitize sensitive data:
 
 ### Rate Limiting
 
-V1 does not implement API rate limiting. V2 will add:
-- Per-user rate limits on mutation endpoints
-- Per-workspace rate limits on AI generation endpoints
-- Global rate limits on authentication endpoints
-- Rate limit headers in API responses
+The system implements per-IP rate limiting via Next.js middleware:
+- 60 requests/minute for general API routes
+- 10 requests/minute for authentication routes
+- 5 requests/minute for AI generation routes
+- 10 requests/minute for AI agent routes
+- Rate limit headers (`X-RateLimit-Remaining`) included in API responses
+- 429 status code with `Retry-After` header when limit exceeded
+
+**Limitations** (noted for future improvement):
+- In-memory rate limiter does not work across multiple instances
+- For production multi-instance deployments, replace with Redis-backed rate limiting
 
 ---
 
