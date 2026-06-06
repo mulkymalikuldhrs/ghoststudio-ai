@@ -4,6 +4,7 @@ Falls back through: OpenRouter/OpenAI-compatible → APIFreeLLM
 """
 
 import json
+import os
 import time
 import requests
 from config import load_config
@@ -96,7 +97,7 @@ class BaseAgent:
     def _apifree_call(self, messages, max_tokens=1024):
         """Fallback to APIFreeLLM."""
         prompt = self._messages_to_prompt(messages)
-        api_key = "apf_ih74idjvjf4dcexdw9jaooho"
+        api_key = os.environ.get("APIFREE_API_KEY", "")
         api_url = "https://apifreellm.com/api/v1/chat"
 
         try:

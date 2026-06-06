@@ -76,6 +76,12 @@ venv/
 *.p12
 *.jks
 
+# Engine config (contains credentials)
+engine/engine_config.json
+
+# Engine output (generated files)
+engine/output/
+
 # Upload directory (large binary files - use object storage)
 upload/*.docx
 upload/*.xlsx

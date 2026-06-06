@@ -1,5 +1,5 @@
 {
-  "openrouter_api_key": "sk-Amc...m7N3",
+  "openrouter_api_key": "",
   "openrouter_model": "deepseek-v4-flash-free",
   "openrouter_base_url": "https://opencode.ai/zen/v1",
   "workspace_id": "default",
@@ -15,11 +15,11 @@
   "quality_threshold": 40,
   "max_publish_sessions": 10,
   "log_level": "INFO",
-  "memory_db_path": "/home/mulky/Desktop/ghoststudio-ai/engine/data/memory.db",
-  "scheduler_db_path": "/home/mulky/Desktop/ghoststudio-ai/engine/data/scheduler.db",
+  "memory_db_path": "",
+  "scheduler_db_path": "",
   "credentials": {
     "telegraph": {
-      "access_token": "0972aeec7747ee191de8298d2dca5446c01d3418fb5897af588a1a63b27d"
+      "access_token": ""
     },
     "medium": {
       "token": ""
@@ -56,11 +56,11 @@
       "contract_address": ""
     },
     "writeas": {
-      "token": "4e19df9b-18ac-4ce7-696a-b9a252834bd7"
+      "token": ""
     },
     "bearblog": {
-      "username": "aimediatech",
-      "password": "AIMedia2026!"
+      "username": "",
+      "password": ""
     },
     "hubpages": {
       "username": "",
@@ -71,8 +71,8 @@
       "password": ""
     },
     "steemit": {
-      "posting_key": "5Jz8BVDWNpLnkxryddxW1HNkiKJNz9Duz1gREoqubEKjmbDuNpv",
-      "username": "mulkymalikuldhr"
+      "posting_key": "",
+      "username": ""
     },
     "lokal": {
       "email": "",

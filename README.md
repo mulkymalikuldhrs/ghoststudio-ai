@@ -1,4 +1,4 @@
-# AI Media Intelligence OS
+# GhostStudio AI — AI Media Intelligence OS
 
 > **Autonomous Media Operating System**
 
@@ -9,6 +9,8 @@ Authority Compounding Engine. Memory-Driven Publishing Infrastructure. Not a too
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
 ![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?style=flat-square&logo=prisma)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06B6D4?style=flat-square&logo=tailwindcss)
+
+> **Status**: This project is in **Alpha** stage. Not recommended for production use without further testing.
 
 ---
 
@@ -48,6 +50,7 @@ Your competitive advantage isn't which LLM you use — it's the accumulated know
 - **Energy System** — Fatigue tracking to prevent content decay and audience burnout
 - **Scheduler** — Persistent job queue with priority, retry, and dead-letter support
 - **Dashboard** — Full control panel with Content Pipeline, Scheduler, Memory, Analytics, Energy tabs
+- **Multi-Platform Publishing** — 18+ platform adapters (WordPress, Medium, DevTo, HashNode, Ghost, Substack, Beehiiv, Mirror.xyz, Write.as, BearBlog, Blogger, HubPages, Vocal, Steemit, Lokal, TikTok, YouTube, Instagram)
 
 ---
 
@@ -64,6 +67,7 @@ Your competitive advantage isn't which LLM you use — it's the accumulated know
 | **Charts** | Recharts |
 | **Animation** | Framer Motion |
 | **Theme** | Red & White accent, Dark/Light mode |
+| **Python Engine** | Pixelle Video + custom agent pipeline |
 
 ---
 
@@ -71,8 +75,8 @@ Your competitive advantage isn't which LLM you use — it's the accumulated know
 
 ```bash
 # Clone the repository
-git clone https://github.com/mulkymalikuldhrs/ai-media-intelligence-os.git
-cd ai-media-intelligence-os
+git clone https://github.com/mulkymalikuldhrs/ghoststudio-ai.git
+cd ghoststudio-ai
 
 # Install dependencies
 bun install
@@ -88,6 +92,22 @@ bun run db:seed
 
 # Start development server
 bun run dev
+```
+
+### Python Engine Setup
+
+```bash
+# Copy engine config template
+cp engine/engine_config.example.json engine/engine_config.json
+# Edit with your actual credentials (NEVER commit this file)
+
+# Set API keys
+export APIFREE_API_KEY="your_apifree_key"
+export OPENROUTER_API_KEY="your_openrouter_key"
+
+# Install Python dependencies
+cd engine
+pip install -r requirements.txt
 ```
 
 ---
@@ -120,6 +140,14 @@ src/
 ├── store/
 │   └── media-store.ts              # Zustand store for dashboard state
 └── docs/                           # 15 comprehensive spec documents
+engine/                              # Python-based agent pipeline
+├── agents/                          # AI agents (trend, scoring, draft, SEO, etc.)
+├── publishers/                      # Platform publisher adapters
+├── scripts/                         # Orchestration scripts
+├── config.py                        # Engine configuration
+├── core.py                          # Engine core
+├── scheduler.py                     # Job scheduler
+└── engine_config.json               # Credentials (DO NOT COMMIT)
 ```
 
 ---
@@ -157,6 +185,15 @@ src/
 
 ---
 
+## 🔒 Security Notice
+
+- **Never commit `engine/engine_config.json`** — it contains credentials. It is listed in `.gitignore`.
+- **Never commit API keys or tokens** to version control. Use environment variables.
+- All platform credentials in `engine_config.json` should be set locally.
+- Report security vulnerabilities to [mulkymalikudhr@mail.com](mailto:mulkymalikudhr@mail.com).
+
+---
+
 ## Documentation
 
 Full specs in `/docs/`:
@@ -173,18 +210,38 @@ Full specs in `/docs/`:
 
 ---
 
+## 👤 Author
+
+**Mulky Malikul Dhaher**
+- Email: [mulkymalikudhr@mail.com](mailto:mulkymalikudhr@mail.com)
+- GitHub: [mulkymalikuldhrs](https://github.com/mulkymalikuldhrs)
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## ⚠️ Disclaimer
+
+**For Education Purpose Only**
+
+This project is provided strictly for educational and research purposes. The authors and contributors assume **no responsibility or liability** for any damages, losses, or risks arising from the use of this software. **We do not bear any responsibility or risk** for how this software is used.
+
+**Contact:** Mulky Malikul Dhaher | mulkymalikudhr@mail.com
+
+---
+
 ## License
 
 MIT License — see [LICENSE](./LICENSE) for details.
 
----
-
-## Author
-
-**Mulky Malikul Dhaher**
-- Email: mulkymalikuldhaher@email.com
-- GitHub: [@mulkymalikuldhrs](https://github.com/mulkymalikuldhrs)
-
----
-
-> **"Build autonomous media infrastructure, not another autoblog."**
+Copyright © Mulky Malikul Dhaher. All rights reserved.
