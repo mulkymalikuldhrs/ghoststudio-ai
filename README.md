@@ -1,77 +1,93 @@
-# GhostStudio AI — AI Media Intelligence OS
+<!-- BANNER -->
+<img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=0:0a0a1a,50:141428,100:1e1e3c&fontColor=818cf8&descColor=c084fc&height=220&section=header&text=GhostStudio%20AI&fontSize=70&desc=AI%20Faceless%20Content%20Generator&animation=fadeIn" />
 
-> **Autonomous Media Operating System**
+<!-- TYPING SVG -->
+<div align="center">
+  <a href="https://git.io/typing-svg">
+    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=22&duration=3000&pause=1000&color=818CF8&center=true&vCenter=true&width=600&lines=Faceless+Content+for+TikTok+%7C+Shorts+%7C+Reels;AI-Generated+Scripts+%2B+Voice+%2B+Visuals;Create+Without+Showing+Your+Face;Content+Quality+Varies+%E2%80%94+Viral+Not+Guaranteed" alt="Typing SVG" />
+  </a>
+</div>
 
-Authority Compounding Engine. Memory-Driven Publishing Infrastructure. Not a tool, not a CMS, not an autoblog — an orchestration layer.
+<br/>
 
-![AI Media Intelligence OS](https://img.shields.io/badge/AI_Media-Intelligence_OS-DC2626?style=for-the-badge&labelColor=0A0A0A)
-![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=next.js)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
-![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?style=flat-square&logo=prisma)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06B6D4?style=flat-square&logo=tailwindcss)
+<!-- BADGES -->
+<div align="center">
 
-> **Status**: This project is in **Alpha** stage. Not recommended for production use without further testing.
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![TTS](https://img.shields.io/badge/TTS-AI_Voice-C084FC?style=for-the-badge&logo=audio&logoColor=white)](#)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](./LICENSE)
 
----
-
-## Core Philosophy
-
-**Wrong approach:** Spam publishing, AI article farming, quantity-first, copy-paste repurpose.
-
-**Correct approach:** Authority compounding, memory-driven writing, platform-native distribution, analytics adaptation, trust-first monetization.
-
-### The True Content Loop
-
-```
-Signal → Interpretation → Content → Distribution → Audience → Analytics → Memory → Strategy Update → New Signal
-```
-
-The system handles: drafting, rewriting, repurposing, scheduling, publishing, analytics, memory, optimization, trend tracking, audience learning.
-
-The operator only: gives direction, gives ideas, oversees quality, makes strategic decisions.
+</div>
 
 ---
 
-## Key Insight
+## Overview
 
-> **Memory is the moat. Not the model.**
+**GhostStudio AI** is a faceless content generation platform that creates short-form video content for TikTok, YouTube Shorts, and Instagram Reels — without ever requiring you to appear on camera. The AI pipeline handles script writing, voiceover generation, visual asset selection, and video composition, producing ready-to-upload content in minutes.
 
-Your competitive advantage isn't which LLM you use — it's the accumulated knowledge of what works for your audience. Every publish cycle makes the next one smarter.
+Whether you're building a faceless brand, testing content niches, or scaling your content production, GhostStudio AI automates the creative heavy lifting so you can focus on strategy and distribution.
 
----
+## Features
 
-## V1 Features
+### AI Script Generation
+- Niche-specific script templates (finance, motivation, facts, storytelling, etc.)
+- Hook optimization for maximum retention
+- Trending topic discovery and script suggestion
+- Multi-language script generation
+- Script variations for A/B testing content
 
-- **Content Pipeline** — Idea → Draft → Humanic Rewrite → SEO → Score → Publish
-- **WordPress Adapter** — Full REST API integration (create draft, publish, schedule, update)
-- **AI Orchestrator** — Model routing (cheap/mid/premium) via OpenRouter
-- **Memory System** — Store and retrieve what works (hooks, topics, tone, timing, CTAs)
-- **Content Scoring** — Writing, Humanic, SEO, Trust dimensions with action thresholds
-- **Energy System** — Fatigue tracking to prevent content decay and audience burnout
-- **Scheduler** — Persistent job queue with priority, retry, and dead-letter support
-- **Dashboard** — Full control panel with Content Pipeline, Scheduler, Memory, Analytics, Energy tabs
-- **Multi-Platform Publishing** — 18+ platform adapters (WordPress, Medium, DevTo, HashNode, Ghost, Substack, Beehiiv, Mirror.xyz, Write.as, BearBlog, Blogger, HubPages, Vocal, Steemit, Lokal, TikTok, YouTube, Instagram)
+### AI Voiceover
+- Multiple AI voice profiles (male, female, various accents)
+- Adjustable pacing, emphasis, and tone
+- Background music auto-mixing
+- Voice cloning capabilities (with consent)
+- Multi-language voiceover support
 
----
+### Visual Composition
+- AI-generated background visuals and animations
+- Text overlay with kinetic typography
+- Stock footage and image integration
+- Caption/subtitle auto-generation
+- Brand-consistent visual templates
 
-## Tech Stack
+### Video Assembly Pipeline
+- Automated end-to-end content production
+- Platform-specific export settings (TikTok 9:16, Shorts, Reels)
+- Batch content generation for scheduling
+- Thumbnail and cover image generation
+- Hashtag and description suggestions
 
-| Layer | Technology |
-|-------|-----------|
-| **Framework** | Next.js 16 (App Router) |
-| **Language** | TypeScript 5 |
-| **Styling** | Tailwind CSS 4 + shadcn/ui |
-| **Database** | Prisma ORM (SQLite → PostgreSQL) |
-| **State** | Zustand + TanStack Query |
-| **AI** | z-ai-web-dev-sdk + OpenRouter |
-| **Charts** | Recharts |
-| **Animation** | Framer Motion |
-| **Theme** | Red & White accent, Dark/Light mode |
-| **Python Engine** | Pixelle Video + custom agent pipeline |
+### Content Management
+- Content calendar and scheduling
+- Performance analytics integration
+- Niche performance tracking
+- Content variant testing dashboard
+- Export queue and batch processing
 
----
+### Multi-Platform Support
+- TikTok format optimization
+- YouTube Shorts specifications
+- Instagram Reels compatibility
+- Cross-platform content adaptation
 
-## Getting Started
+## Honest Notes
+
+> **Setting realistic expectations:**
+
+- **AI Content Quality Varies** — Generated content ranges from impressive to mediocre. Scripts may need editing, AI voiceovers can sound robotic, and visual compositions sometimes require manual tweaks. Expect a human review step.
+- **Viral Success Not Guaranteed** — No tool can guarantee viral content. Success depends on timing, niche, audience, and many factors beyond content quality. GhostStudio AI produces content — audience building is still your job.
+- **Platform Algorithms Change** — TikTok, YouTube, and Instagram regularly update their algorithms and content policies. What works today may not work tomorrow, and AI-generated content policies are evolving.
+- **Content Saturation** — As AI content tools become common, audiences may develop fatigue for AI-generated styles. Differentiation requires creativity beyond what any tool provides.
+- **Platform Policies** — Some platforms may require disclosure of AI-generated content. Stay informed about current policies and comply with disclosure requirements.
+
+## Quick Start
+
+### Prerequisites
+- Node.js 18+
+- API keys for LLM and TTS providers
+
+### Installation
 
 ```bash
 # Clone the repository
@@ -79,169 +95,109 @@ git clone https://github.com/mulkymalikuldhrs/ghoststudio-ai.git
 cd ghoststudio-ai
 
 # Install dependencies
-bun install
+npm install
 
-# Set up environment variables
+# Configure environment
 cp .env.example .env
-
-# Push database schema
-bun run db:push
-
-# Seed with sample data
-bun run db:seed
-
-# Start development server
-bun run dev
 ```
 
-### Python Engine Setup
+### Configuration
+
+```env
+# AI Providers
+OPENAI_API_KEY=your_key
+ELEVENLABS_API_KEY=your_key
+
+# Asset Sources (optional)
+PEXELS_API_KEY=your_key
+UNSPLASH_ACCESS_KEY=your_key
+
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+DATABASE_URL=your_database_url
+```
+
+### Running
 
 ```bash
-# Copy engine config template
-cp engine/engine_config.example.json engine/engine_config.json
-# Edit with your actual credentials (NEVER commit this file)
+# Development
+npm run dev
 
-# Set API keys
-export APIFREE_API_KEY="your_apifree_key"
-export OPENROUTER_API_KEY="your_openrouter_key"
-
-# Install Python dependencies
-cd engine
-pip install -r requirements.txt
+# Production
+npm run build && npm start
 ```
-
----
 
 ## Project Structure
 
 ```
-src/
-├── app/
-│   ├── page.tsx                    # Full dashboard (content pipeline, scheduler, memory, analytics, energy)
-│   ├── layout.tsx                  # Root layout with theme provider
-│   ├── globals.css                 # Red & white accent theme
-│   └── api/
-│       ├── content/                # Content CRUD + generation + scoring
-│       ├── publish/                # Platform publishing
-│       ├── scheduler/              # Job queue management
-│       ├── memory/                 # Memory system
-│       ├── energy/                 # Energy/fatigue tracking
-│       └── analytics/              # Analytics ingestion & reporting
-├── lib/
-│   ├── ai-orchestrator.ts          # AI routing (cheap/mid/premium) + content pipeline
-│   ├── memory-system.ts            # Memory store + retrieval + pattern detection
-│   ├── content-scoring.ts          # 4-dimension scoring system
-│   ├── energy-system.ts            # Fatigue tracking + saturation prevention
-│   ├── scheduler.ts                # Persistent job queue with priorities
-│   ├── publishers/
-│   │   ├── wordpress.ts            # WordPress REST API adapter
-│   │   └── index.ts                # Publisher factory (9 platforms)
-│   └── db.ts                       # Prisma client
-├── store/
-│   └── media-store.ts              # Zustand store for dashboard state
-└── docs/                           # 15 comprehensive spec documents
-engine/                              # Python-based agent pipeline
-├── agents/                          # AI agents (trend, scoring, draft, SEO, etc.)
-├── publishers/                      # Platform publisher adapters
-├── scripts/                         # Orchestration scripts
-├── config.py                        # Engine configuration
-├── core.py                          # Engine core
-├── scheduler.py                     # Job scheduler
-└── engine_config.json               # Credentials (DO NOT COMMIT)
+ghoststudio-ai/
+├── src/
+│   ├── app/                # Next.js app router
+│   ├── components/
+│   │   ├── editor/         # Content editing interface
+│   │   ├── generator/      # Content generation views
+│   │   ├── calendar/       # Scheduling dashboard
+│   │   └── analytics/      # Performance views
+│   ├── lib/
+│   │   ├── pipeline/       # Content generation pipeline
+│   │   ├── scripts/        # AI script generation
+│   │   ├── voiceover/      # TTS integration
+│   │   ├── visuals/        # Visual asset generation
+│   │   ├── video/          # Video composition engine
+│   │   └── platforms/      # Platform-specific exporters
+│   └── types/              # TypeScript definitions
+├── templates/              # Content templates
+└── tests/                  # Test suites
 ```
 
----
+## Content Pipeline
 
-## Content Scoring
+```
+┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
+│  Niche   │──▶│  Script  │──▶│ Voiceover│──▶│ Visuals  │──▶│  Video   │
+│ Research │   │ Writing  │   │   TTS    │   │ Compose  │   │  Export  │
+└──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘
+                    │                               │               │
+                    ▼                               ▼               ▼
+              ┌──────────┐                   ┌──────────┐   ┌──────────┐
+              │  Script  │                   │  Visual  │   │ Platform │
+              │  Editor  │                   │  Editor  │   │  Upload  │
+              └──────────┘                   └──────────┘   └──────────┘
+```
 
-| Score | Action |
-|-------|--------|
-| **80+** | Auto-schedule for publishing |
-| **60-79** | Route to human review |
-| **Below 60** | Reject or rewrite |
-
----
-
-## Automation Modes
-
-| Mode | Behavior |
-|------|----------|
-| **Manual** | Human approves everything |
-| **Semi-Auto** | AI drafts, human approves, auto publish |
-| **Full Auto** | AI handles publishing under rules |
-| **Daily Autonomous** | System generates, schedules, distributes, tracks, learns every day |
-
----
-
-## Build Phases
-
-| Phase | Focus |
-|-------|-------|
-| **V1** | WordPress only, markdown-first, one queue, one memory system, semi-auto |
-| **V2** | Repurpose engine, analytics ingestion, auto scheduling |
-| **V3** | Multi-platform dashboard, AI routing, full dashboard |
-| **V4** | Trend intelligence, monetization intelligence, audience learning |
-| **V5** | Autonomous strategic publishing |
-
----
-
-## 🔒 Security Notice
-
-- **Never commit `engine/engine_config.json`** — it contains credentials. It is listed in `.gitignore`.
-- **Never commit API keys or tokens** to version control. Use environment variables.
-- All platform credentials in `engine_config.json` should be set locally.
-- Report security vulnerabilities to [mulkymalikudhr@mail.com](mailto:mulkymalikudhr@mail.com).
-
----
-
-## Documentation
-
-Full specs in `/docs/`:
-- [Architecture](docs/ARCHITECTURE.md) — 7-layer system design
-- [Database](docs/DATABASE.md) — 13 tables with full schema docs
-- [Agents](docs/AGENTS.md) — 10 AI agents
-- [Memory](docs/MEMORY.md) — Memory system philosophy
-- [Content Engine](docs/CONTENT_ENGINE.md) — DNA system, humanic rules
-- [Platform Strategy](docs/PLATFORM_STRATEGY.md) — WordPress hub, distribution channels
-- [AI Routing](docs/AI_ROUTING.md) — Cheap/mid/premium model routing
-- [Energy System](docs/ENERGY_SYSTEM.md) — Fatigue tracking
-- [Build Order](docs/BUILD_ORDER.md) — V1 through V5
-- [Roadmap](docs/ROADMAP.md) — Development roadmap
-
----
-
-## 👤 Author
-
-**Mulky Malikul Dhaher**
-- Email: [mulkymalikudhr@mail.com](mailto:mulkymalikudhr@mail.com)
-- GitHub: [mulkymalikuldhrs](https://github.com/mulkymalikuldhrs)
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+## Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Add tests for new functionality
+4. Submit a pull request
 
----
+We're especially interested in:
+- New content templates and niches
+- Better visual composition algorithms
+- Additional TTS provider integrations
+- Platform-specific optimizations
 
-## ⚠️ Disclaimer
+## Disclaimer
 
-**For Education Purpose Only**
-
-This project is provided strictly for educational and research purposes. The authors and contributors assume **no responsibility or liability** for any damages, losses, or risks arising from the use of this software. **We do not bear any responsibility or risk** for how this software is used.
-
-**Contact:** Mulky Malikul Dhaher | mulkymalikudhr@mail.com
-
----
+GhostStudio AI is a content creation tool. Users are solely responsible for ensuring their content complies with platform terms of service, disclosure requirements for AI-generated content, copyright laws, and advertising regulations. The authors assume no liability for content produced using this tool or its performance on any platform.
 
 ## License
 
-MIT License — see [LICENSE](./LICENSE) for details.
+This project is licensed under the **MIT License** — see the [LICENSE](./LICENSE) file for details.
 
-Copyright © Mulky Malikul Dhaher. All rights reserved.
+## Author
+
+<div align="center">
+
+**Mulky Malikul Dhaher**
+
+[![GitHub](https://img.shields.io/badge/GitHub-mulkymalikuldhrs-181717?style=flat-square&logo=github)](https://github.com/mulkymalikuldhrs)
+[![Email](https://img.shields.io/badge/Email-mulkymalikudhr@mail.com-EA4335?style=flat-square&logo=gmail&logoColor=white)](mailto:mulkymalikudhr@mail.com)
+
+</div>
+
+---
+
+<!-- FOOTER BANNER -->
+<img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=0:0a0a1a,50:141428,100:1e1e3c&fontColor=818cf8&descColor=c084fc&height=120&section=footer&text=&fontSize=0" />
