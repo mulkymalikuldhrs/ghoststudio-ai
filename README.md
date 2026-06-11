@@ -169,6 +169,182 @@ ghoststudio-ai/
               └──────────┘                   └──────────┘   └──────────┘
 ```
 
+## Visual Architecture
+
+> Interactive Mermaid diagrams — viewable on GitHub. These illustrate the system design and data flow at a glance.
+
+### Content Generation Pipeline
+
+```mermaid
+flowchart LR
+    subgraph Input["🔍 Input Stage"]
+        Niche[Niche Research]
+        Trend[Trending Topics]
+    end
+
+    subgraph Script["✍️ Script Stage"]
+        Draft[Script Drafting]
+        Hook[Hook Optimization]
+        AB[A/B Variants]
+    end
+
+    subgraph Voice["🎙️ Voiceover Stage"]
+        TTS[AI TTS Engine]
+        Mix[Music Mixing]
+        Lang[Multi-Language]
+    end
+
+    subgraph Visual["🎨 Visual Stage"]
+        BG[Background Generation]
+        Kinetic[Kinetic Typography]
+        Captions[Auto Captions]
+    end
+
+    subgraph Video["🎬 Video Stage"]
+        Compose[Video Composition]
+        Export[Platform Export]
+        Thumb[Thumbnail Gen]
+    end
+
+    subgraph Publish["📤 Publish Stage"]
+        Schedule[Content Calendar]
+        Upload[Platform Upload]
+        Analytics[Performance Track]
+    end
+
+    Input --> Script --> Voice --> Visual --> Video --> Publish
+
+    Draft -.->|Human Review| Script
+    BG -.->|Manual Tweak| Visual
+```
+
+### Python Agent Architecture
+
+```mermaid
+flowchart TB
+    subgraph Engine["🐍 Python Autonomous Engine"]
+        direction TB
+        Orch[Orchestrator]
+
+        subgraph Agents["8 Specialized Agents"]
+            Draft[Draft Agent<br/>Script generation & templates]
+            Score[Scoring Agent<br/>Quality assessment & ranking]
+            SEO[SEO Agent<br/>Keywords, hashtags, descriptions]
+            Trend[Trend Agent<br/>Trending topic discovery]
+            Mem[Memory Agent<br/>Historical performance data]
+            Repurpose[Repurpose Agent<br/>Cross-platform adaptation]
+            Human[Humanic Agent<br/>Human review & approval gate]
+            API[API-Free Agent<br/>No-cost fallback content]
+        end
+
+        Orch --> Draft
+        Orch --> Score
+        Orch --> SEO
+        Orch --> Trend
+        Orch --> Mem
+        Orch --> Repurpose
+        Orch --> Human
+        Orch --> API
+    end
+
+    Draft -->|script| Score
+    Score -->|ranked| SEO
+    Trend -->|topics| Draft
+    Mem -->|history| Score
+    Human -->|approved| Repurpose
+    API -->|fallback| Draft
+```
+
+### Publisher Ecosystem
+
+```mermaid
+flowchart TB
+    subgraph Publishers["📤 22+ Publisher Integrations"]
+        direction TB
+
+        subgraph Video["🎥 Video Platforms"]
+            TikTok[TikTok]
+            YTShorts[YouTube Shorts]
+            Reels[Instagram Reels]
+            YTLong[YouTube Long-form]
+        end
+
+        subgraph Social["📱 Social Media"]
+            IG[Instagram Post/Story]
+            Twitter[X / Twitter]
+            FB[Facebook]
+            LinkedIn[LinkedIn]
+            Threads[Threads]
+            Pinterest[Pinterest]
+        end
+
+        subgraph Blog["📝 Blog & Article"]
+            Medium[Medium]
+            DevTo[Dev.to]
+            Hashnode[Hashnode]
+            WordPress[WordPress]
+            GhostBlog[Ghost]
+        end
+
+        subgraph Audio["🎵 Audio & Podcast"]
+            Spotify[Spotify Podcasts]
+            Anchor[Anchor]
+            ApplePod[Apple Podcasts]
+        end
+
+        subgraph Community["💬 Community"]
+            Reddit[Reddit]
+            Discord[Discord]
+            Telegram[Telegram]
+            Slack[Slack]
+        end
+    end
+
+    Engine[Python Engine] --> Publishers
+```
+
+### Full Stack Architecture
+
+```mermaid
+flowchart TB
+    subgraph Frontend["⚛️ Next.js Frontend"]
+        UI[React UI<br/>App Router]
+        Editor[Content Editor]
+        Calendar[Scheduling Dashboard]
+        Analytics[Analytics View]
+    end
+
+    subgraph Backend["🐍 Python Autonomous Engine"]
+        Orch[Orchestrator]
+        Agents[8 AI Agents]
+        Publishers[22+ Publishers]
+    end
+
+    subgraph Infra["🐳 Docker + Caddy"]
+        Caddy[Caddy Reverse Proxy<br/>Auto HTTPS]
+        DockerFE[Docker<br/>Next.js Container]
+        DockerBE[Docker<br/>Python Container]
+    end
+
+    subgraph External["🌐 External APIs"]
+        LLM[LLM Provider<br/>OpenAI / Anthropic]
+        TTS[TTS Provider<br/>ElevenLabs]
+        Assets[Asset Sources<br/>Pexels / Unsplash]
+    end
+
+    UI --> Editor
+    UI --> Calendar
+    UI --> Analytics
+    Editor -->|API calls| Orch
+    Orch --> Agents
+    Agents --> Publishers
+    Caddy --> DockerFE
+    Caddy --> DockerBE
+    DockerFE --> Frontend
+    DockerBE --> Backend
+    Backend --> External
+```
+
 ## Contributing
 
 1. Fork the repository
