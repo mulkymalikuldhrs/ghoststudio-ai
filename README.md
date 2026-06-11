@@ -1,4 +1,6 @@
-<!-- BANNER -->
+<img src="docs/banner.png" width="100%">
+
+<!-- CAPSULE-RENDER HEADER -->
 <img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=0:0a0a1a,50:141428,100:1e1e3c&fontColor=818cf8&descColor=c084fc&height=220&section=header&text=GhostStudio%20AI&fontSize=70&desc=AI%20Faceless%20Content%20Generator&animation=fadeIn" />
 
 <!-- TYPING SVG -->
@@ -24,7 +26,7 @@
 
 ## Overview
 
-**GhostStudio AI** is a faceless content generation platform that creates short-form video content for TikTok, YouTube Shorts, and Instagram Reels — without ever requiring you to appear on camera. The AI pipeline handles script writing, voiceover generation, visual asset selection, and video composition, producing ready-to-upload content in minutes.
+**GhostStudio AI** is a faceless content generation platform that creates short-form video content for TikTok, YouTube Shorts, and Instagram Reels -- without ever requiring you to appear on camera. The AI pipeline handles script writing, voiceover generation, visual asset selection, and video composition, producing ready-to-upload content in minutes.
 
 Whether you're building a faceless brand, testing content niches, or scaling your content production, GhostStudio AI automates the creative heavy lifting so you can focus on strategy and distribution.
 
@@ -75,11 +77,211 @@ Whether you're building a faceless brand, testing content niches, or scaling you
 
 > **Setting realistic expectations:**
 
-- **AI Content Quality Varies** — Generated content ranges from impressive to mediocre. Scripts may need editing, AI voiceovers can sound robotic, and visual compositions sometimes require manual tweaks. Expect a human review step.
-- **Viral Success Not Guaranteed** — No tool can guarantee viral content. Success depends on timing, niche, audience, and many factors beyond content quality. GhostStudio AI produces content — audience building is still your job.
-- **Platform Algorithms Change** — TikTok, YouTube, and Instagram regularly update their algorithms and content policies. What works today may not work tomorrow, and AI-generated content policies are evolving.
-- **Content Saturation** — As AI content tools become common, audiences may develop fatigue for AI-generated styles. Differentiation requires creativity beyond what any tool provides.
-- **Platform Policies** — Some platforms may require disclosure of AI-generated content. Stay informed about current policies and comply with disclosure requirements.
+- **AI Content Quality Varies** -- Generated content ranges from impressive to mediocre. Scripts may need editing, AI voiceovers can sound robotic, and visual compositions sometimes require manual tweaks. Expect a human review step.
+- **Viral Success Not Guaranteed** -- No tool can guarantee viral content. Success depends on timing, niche, audience, and many factors beyond content quality. GhostStudio AI produces content -- audience building is still your job.
+- **Platform Algorithms Change** -- TikTok, YouTube, and Instagram regularly update their algorithms and content policies. What works today may not work tomorrow, and AI-generated content policies are evolving.
+- **Content Saturation** -- As AI content tools become common, audiences may develop fatigue for AI-generated styles. Differentiation requires creativity beyond what any tool provides.
+- **Platform Policies** -- Some platforms may require disclosure of AI-generated content. Stay informed about current policies and comply with disclosure requirements.
+
+---
+
+## Architecture Visualizations
+
+### Content Generation Pipeline
+
+```mermaid
+flowchart LR
+    subgraph Input["Input Stage"]
+        Niche[Niche Research]
+        Trend[Trending Topics]
+    end
+
+    subgraph Script["Script Stage"]
+        Draft[Script Drafting]
+        Hook[Hook Optimization]
+        AB[A/B Variants]
+    end
+
+    subgraph Voice["Voiceover Stage"]
+        TTS[AI TTS Engine]
+        Mix[Music Mixing]
+        Lang[Multi-Language]
+    end
+
+    subgraph Visual["Visual Stage"]
+        BG[Background Generation]
+        Kinetic[Kinetic Typography]
+        Captions[Auto Captions]
+    end
+
+    subgraph Video["Video Stage"]
+        Compose[Video Composition]
+        Export[Platform Export]
+        Thumb[Thumbnail Gen]
+    end
+
+    subgraph Publish["Publish Stage"]
+        Schedule[Content Calendar]
+        Upload[Platform Upload]
+        Analytics[Performance Track]
+    end
+
+    Input --> Script --> Voice --> Visual --> Video --> Publish
+
+    Draft -.->|Human Review| Script
+    BG -.->|Manual Tweak| Visual
+
+    style Input fill:#e8f4fd,stroke:#2196f3,color:#000
+    style Script fill:#fff3e0,stroke:#ff9800,color:#000
+    style Voice fill:#f3e5f5,stroke:#7b1fa2,color:#000
+    style Visual fill:#e8f5e9,stroke:#4caf50,color:#000
+    style Video fill:#fce4ec,stroke:#e91e63,color:#000
+    style Publish fill:#e0f2f1,stroke:#009688,color:#000
+```
+
+### Python Agent Architecture
+
+```mermaid
+flowchart TB
+    subgraph Engine["Python Autonomous Engine"]
+        direction TB
+        Orch[Orchestrator]
+
+        subgraph Agents["8 Specialized Agents"]
+            Draft[Draft Agent<br/>Script generation and templates]
+            Score[Scoring Agent<br/>Quality assessment and ranking]
+            SEO[SEO Agent<br/>Keywords, hashtags, descriptions]
+            Trend[Trend Agent<br/>Trending topic discovery]
+            Mem[Memory Agent<br/>Historical performance data]
+            Repurpose[Repurpose Agent<br/>Cross-platform adaptation]
+            Human[Humanic Agent<br/>Human review and approval gate]
+            APIFree[API-Free Agent<br/>No-cost fallback content]
+        end
+
+        Orch --> Draft
+        Orch --> Score
+        Orch --> SEO
+        Orch --> Trend
+        Orch --> Mem
+        Orch --> Repurpose
+        Orch --> Human
+        Orch --> APIFree
+    end
+
+    Draft -->|script| Score
+    Score -->|ranked| SEO
+    Trend -->|topics| Draft
+    Mem -->|history| Score
+    Human -->|approved| Repurpose
+    APIFree -->|fallback| Draft
+
+    style Engine fill:#1e1e3c,stroke:#818cf8,color:#fff
+    style Agents fill:#141428,stroke:#818cf8,color:#fff
+```
+
+### Publisher Ecosystem
+
+```mermaid
+flowchart TB
+    subgraph Publishers["22+ Publisher Integrations"]
+        direction TB
+
+        subgraph Video["Video Platforms"]
+            TikTok[TikTok]
+            YTShorts[YouTube Shorts]
+            Reels[Instagram Reels]
+            YTLong[YouTube Long-form]
+        end
+
+        subgraph Social["Social Media"]
+            IG[Instagram Post and Story]
+            Twitter[X / Twitter]
+            FB[Facebook]
+            LinkedIn[LinkedIn]
+            Threads[Threads]
+            Pinterest[Pinterest]
+        end
+
+        subgraph Blog["Blog and Article"]
+            Medium[Medium]
+            DevTo[Dev.to]
+            Hashnode[Hashnode]
+            WordPress[WordPress]
+            GhostBlog[Ghost]
+        end
+
+        subgraph Audio["Audio and Podcast"]
+            Spotify[Spotify Podcasts]
+            Anchor[Anchor]
+            ApplePod[Apple Podcasts]
+        end
+
+        subgraph Community["Community"]
+            Reddit[Reddit]
+            Discord[Discord]
+            Telegram[Telegram]
+            Slack[Slack]
+        end
+    end
+
+    Engine[Python Engine] --> Publishers
+
+    style Publishers fill:#141428,stroke:#818cf8,color:#fff
+    style Video fill:#e8f4fd,stroke:#2196f3,color:#000
+    style Social fill:#fce4ec,stroke:#e91e63,color:#000
+    style Blog fill:#e8f5e9,stroke:#4caf50,color:#000
+    style Audio fill:#f3e5f5,stroke:#7b1fa2,color:#000
+    style Community fill:#fff3e0,stroke:#ff9800,color:#000
+```
+
+### Full Stack Architecture
+
+```mermaid
+flowchart TB
+    subgraph Frontend["Next.js Frontend"]
+        UI[React UI<br/>App Router]
+        Editor[Content Editor]
+        Calendar[Scheduling Dashboard]
+        Analytics[Analytics View]
+    end
+
+    subgraph Backend["Python Autonomous Engine"]
+        Orch[Orchestrator]
+        Agents[8 AI Agents]
+        Publishers[22+ Publishers]
+    end
+
+    subgraph Infra["Docker + Caddy"]
+        Caddy[Caddy Reverse Proxy<br/>Auto HTTPS]
+        DockerFE[Docker<br/>Next.js Container]
+        DockerBE[Docker<br/>Python Container]
+    end
+
+    subgraph External["External APIs"]
+        LLM[LLM Provider<br/>OpenAI / Anthropic]
+        TTS[TTS Provider<br/>ElevenLabs]
+        Assets[Asset Sources<br/>Pexels / Unsplash]
+    end
+
+    UI --> Editor
+    UI --> Calendar
+    UI --> Analytics
+    Editor -->|API calls| Orch
+    Orch --> Agents
+    Agents --> Publishers
+    Caddy --> DockerFE
+    Caddy --> DockerBE
+    DockerFE --> Frontend
+    DockerBE --> Backend
+    Backend --> External
+
+    style Frontend fill:#e3f2fd,stroke:#1976d2,color:#000
+    style Backend fill:#1e1e3c,stroke:#818cf8,color:#fff
+    style Infra fill:#fff3e0,stroke:#ff9800,color:#000
+    style External fill:#e8f5e9,stroke:#4caf50,color:#000
+```
+
+---
 
 ## Quick Start
 
@@ -91,10 +293,6 @@ Whether you're building a faceless brand, testing content niches, or scaling you
 
 ```bash
 # Clone the repository
-
-<!-- AUTO-PACKAGE-BADGES:START -->
-
-<!-- AUTO-PACKAGE-BADGES:END -->
 git clone https://github.com/mulkymalikuldhrs/ghoststudio-ai.git
 cd ghoststudio-ai
 
@@ -131,6 +329,8 @@ npm run dev
 npm run build && npm start
 ```
 
+---
+
 ## Project Structure
 
 ```
@@ -154,196 +354,7 @@ ghoststudio-ai/
 └── tests/                  # Test suites
 ```
 
-## Content Pipeline
-
-```
-┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
-│  Niche   │──▶│  Script  │──▶│ Voiceover│──▶│ Visuals  │──▶│  Video   │
-│ Research │   │ Writing  │   │   TTS    │   │ Compose  │   │  Export  │
-└──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘
-                    │                               │               │
-                    ▼                               ▼               ▼
-              ┌──────────┐                   ┌──────────┐   ┌──────────┐
-              │  Script  │                   │  Visual  │   │ Platform │
-              │  Editor  │                   │  Editor  │   │  Upload  │
-              └──────────┘                   └──────────┘   └──────────┘
-```
-
-## Visual Architecture
-
-> Interactive Mermaid diagrams — viewable on GitHub. These illustrate the system design and data flow at a glance.
-
-### Content Generation Pipeline
-
-```mermaid
-flowchart LR
-    subgraph Input["🔍 Input Stage"]
-        Niche[Niche Research]
-        Trend[Trending Topics]
-    end
-
-    subgraph Script["✍️ Script Stage"]
-        Draft[Script Drafting]
-        Hook[Hook Optimization]
-        AB[A/B Variants]
-    end
-
-    subgraph Voice["🎙️ Voiceover Stage"]
-        TTS[AI TTS Engine]
-        Mix[Music Mixing]
-        Lang[Multi-Language]
-    end
-
-    subgraph Visual["🎨 Visual Stage"]
-        BG[Background Generation]
-        Kinetic[Kinetic Typography]
-        Captions[Auto Captions]
-    end
-
-    subgraph Video["🎬 Video Stage"]
-        Compose[Video Composition]
-        Export[Platform Export]
-        Thumb[Thumbnail Gen]
-    end
-
-    subgraph Publish["📤 Publish Stage"]
-        Schedule[Content Calendar]
-        Upload[Platform Upload]
-        Analytics[Performance Track]
-    end
-
-    Input --> Script --> Voice --> Visual --> Video --> Publish
-
-    Draft -.->|Human Review| Script
-    BG -.->|Manual Tweak| Visual
-```
-
-### Python Agent Architecture
-
-```mermaid
-flowchart TB
-    subgraph Engine["🐍 Python Autonomous Engine"]
-        direction TB
-        Orch[Orchestrator]
-
-        subgraph Agents["8 Specialized Agents"]
-            Draft[Draft Agent<br/>Script generation & templates]
-            Score[Scoring Agent<br/>Quality assessment & ranking]
-            SEO[SEO Agent<br/>Keywords, hashtags, descriptions]
-            Trend[Trend Agent<br/>Trending topic discovery]
-            Mem[Memory Agent<br/>Historical performance data]
-            Repurpose[Repurpose Agent<br/>Cross-platform adaptation]
-            Human[Humanic Agent<br/>Human review & approval gate]
-            API[API-Free Agent<br/>No-cost fallback content]
-        end
-
-        Orch --> Draft
-        Orch --> Score
-        Orch --> SEO
-        Orch --> Trend
-        Orch --> Mem
-        Orch --> Repurpose
-        Orch --> Human
-        Orch --> API
-    end
-
-    Draft -->|script| Score
-    Score -->|ranked| SEO
-    Trend -->|topics| Draft
-    Mem -->|history| Score
-    Human -->|approved| Repurpose
-    API -->|fallback| Draft
-```
-
-### Publisher Ecosystem
-
-```mermaid
-flowchart TB
-    subgraph Publishers["📤 22+ Publisher Integrations"]
-        direction TB
-
-        subgraph Video["🎥 Video Platforms"]
-            TikTok[TikTok]
-            YTShorts[YouTube Shorts]
-            Reels[Instagram Reels]
-            YTLong[YouTube Long-form]
-        end
-
-        subgraph Social["📱 Social Media"]
-            IG[Instagram Post/Story]
-            Twitter[X / Twitter]
-            FB[Facebook]
-            LinkedIn[LinkedIn]
-            Threads[Threads]
-            Pinterest[Pinterest]
-        end
-
-        subgraph Blog["📝 Blog & Article"]
-            Medium[Medium]
-            DevTo[Dev.to]
-            Hashnode[Hashnode]
-            WordPress[WordPress]
-            GhostBlog[Ghost]
-        end
-
-        subgraph Audio["🎵 Audio & Podcast"]
-            Spotify[Spotify Podcasts]
-            Anchor[Anchor]
-            ApplePod[Apple Podcasts]
-        end
-
-        subgraph Community["💬 Community"]
-            Reddit[Reddit]
-            Discord[Discord]
-            Telegram[Telegram]
-            Slack[Slack]
-        end
-    end
-
-    Engine[Python Engine] --> Publishers
-```
-
-### Full Stack Architecture
-
-```mermaid
-flowchart TB
-    subgraph Frontend["⚛️ Next.js Frontend"]
-        UI[React UI<br/>App Router]
-        Editor[Content Editor]
-        Calendar[Scheduling Dashboard]
-        Analytics[Analytics View]
-    end
-
-    subgraph Backend["🐍 Python Autonomous Engine"]
-        Orch[Orchestrator]
-        Agents[8 AI Agents]
-        Publishers[22+ Publishers]
-    end
-
-    subgraph Infra["🐳 Docker + Caddy"]
-        Caddy[Caddy Reverse Proxy<br/>Auto HTTPS]
-        DockerFE[Docker<br/>Next.js Container]
-        DockerBE[Docker<br/>Python Container]
-    end
-
-    subgraph External["🌐 External APIs"]
-        LLM[LLM Provider<br/>OpenAI / Anthropic]
-        TTS[TTS Provider<br/>ElevenLabs]
-        Assets[Asset Sources<br/>Pexels / Unsplash]
-    end
-
-    UI --> Editor
-    UI --> Calendar
-    UI --> Analytics
-    Editor -->|API calls| Orch
-    Orch --> Agents
-    Agents --> Publishers
-    Caddy --> DockerFE
-    Caddy --> DockerBE
-    DockerFE --> Frontend
-    DockerBE --> Backend
-    Backend --> External
-```
+---
 
 ## Contributing
 
@@ -358,13 +369,19 @@ We're especially interested in:
 - Additional TTS provider integrations
 - Platform-specific optimizations
 
+---
+
 ## Disclaimer
 
 GhostStudio AI is a content creation tool. Users are solely responsible for ensuring their content complies with platform terms of service, disclosure requirements for AI-generated content, copyright laws, and advertising regulations. The authors assume no liability for content produced using this tool or its performance on any platform.
 
+---
+
 ## License
 
-This project is licensed under the **MIT License** — see the [LICENSE](./LICENSE) file for details.
+This project is licensed under the **MIT License** -- see the [LICENSE](./LICENSE) file for details.
+
+---
 
 ## Author
 
@@ -380,4 +397,4 @@ This project is licensed under the **MIT License** — see the [LICENSE](./LICEN
 ---
 
 <!-- FOOTER BANNER -->
-<img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=0:0a0a1a,50:141428,100:1e1e3c&fontColor=818cf8&descColor=c084fc&height=120&section=footer&text=&fontSize=0" />
+<img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=0:0a0a1a,50:141428,100:1e1e3c&fontColor=818cf8&descColor=c084fc&height=120&section=footer" />
