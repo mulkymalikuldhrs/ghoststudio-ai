@@ -1,4 +1,3 @@
-<img src="docs/banner.png" width="100%">
 
 <!-- CAPSULE-RENDER HEADER -->
 <img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=0:0a0a1a,50:141428,100:1e1e3c&fontColor=818cf8&descColor=c084fc&height=220&section=header&text=GhostStudio%20AI&fontSize=70&desc=AI%20Faceless%20Content%20Generator&animation=fadeIn" />
